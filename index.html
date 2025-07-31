@@ -81,10 +81,17 @@
                 match: false
             });
             
-            // Initialize Supabase
-            const supabaseUrl = 'https://vmdsqcwgrivjaxikiabr.supabase.co';
-            const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtZHNxY3dncml2amF4aWtpYWJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ3MDU1NjcsImV4cCI6MjA1MDI4MTU2N30.6oSx_XpqwNB0FzRnNVfhW91U8FO7QGBL0r9Q5zxKqDg';
-            const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+            // Initialize Supabase only if available
+            let supabase = null;
+            try {
+                if (window.supabase) {
+                    const supabaseUrl = 'https://vmdsqcwgrivjaxikiabr.supabase.co';
+                    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtZHNxY3dncml2amF4aWtpYWJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ3MDU1NjcsImV4cCI6MjA1MDI4MTU2N30.6oSx_XpqwNB0FzRnNVfhW91U8FO7QGBL0r9Q5zxKqDg';
+                    supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+                }
+            } catch (e) {
+                console.warn('Supabase not available:', e);
+            }
             
             // Get URL parameters
             const urlParams = new URLSearchParams(window.location.search);
@@ -114,12 +121,18 @@
                     }
                     
                     // If we have access tokens, set the session
-                    if (accessToken && type === 'recovery') {
-                        await supabase.auth.setSession({
-                            access_token: accessToken,
-                            refresh_token: refreshToken || ''
-                        });
-                        setStep('reset');
+                    if (accessToken && type === 'recovery' && supabase) {
+                        try {
+                            await supabase.auth.setSession({
+                                access_token: accessToken,
+                                refresh_token: refreshToken || ''
+                            });
+                            setStep('reset');
+                        } catch (err) {
+                            console.error('Session error:', err);
+                            setError('Failed to authenticate. Please try the reset link again.');
+                            setStep('error');
+                        }
                         setLoading(false);
                         return;
                     }
@@ -214,12 +227,17 @@
                 setError('');
                 
                 try {
-                    const { error } = await supabase.auth.updateUser({
-                        password: password
-                    });
-                    
-                    if (error) {
-                        throw error;
+                    if (supabase) {
+                        const { error } = await supabase.auth.updateUser({
+                            password: password
+                        });
+                        
+                        if (error) {
+                            throw error;
+                        }
+                    } else {
+                        // Fallback if Supabase isn't available
+                        throw new Error('Authentication service not available');
                     }
                     
                     setStep('success');
@@ -419,18 +437,12 @@
                                 <p className="text-gray-600 text-sm mb-2">
                                     Don't have the app yet?
                                 </p>
-                                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                                <div className="flex justify-center">
                                     <a 
                                         href="https://play.google.com/store/apps/details?id=com.swapmystuff20" 
-                                        className="flex items-center justify-center bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors duration-200 text-sm font-medium"
+                                        className="flex items-center justify-center bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors duration-200 text-sm font-medium"
                                     >
-                                        📱 Google Play
-                                    </a>
-                                    <a 
-                                        href="https://apps.apple.com/app/swapmystuff" 
-                                        className="flex items-center justify-center bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-900 transition-colors duration-200 text-sm font-medium"
-                                    >
-                                        🍎 App Store
+                                        📱 Get on Google Play
                                     </a>
                                 </div>
                             </div>
@@ -446,6 +458,7 @@
             );
         }
 
+        // Use the same rendering method as the working email verification page
         ReactDOM.render(<PasswordResetPage />, document.getElementById('root'));
     </script>
 </body>
