@@ -1,0 +1,2 @@
+# reset-password
+auth1
