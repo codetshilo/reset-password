@@ -104,6 +104,7 @@
             const accessToken = urlParams.get('access_token');
             const refreshToken = urlParams.get('refresh_token');
             const redirectedFromFunction = accessToken || refreshToken;
+            const userAgent = c.req.header("user-agent") ?? "";
             
             React.useEffect(() => {
                 initializePage();
@@ -144,6 +145,15 @@
                         setLoading(false);
                         return;
                     }
+
+                    if (userAgent.includes("Android") || userAgent.includes("iPhone")) {
+                      // show fallback HTML to attempt opening the app
+                      return c.html(renderRedirectPage({ androidAppLink, webAppLink, email }))
+                    } else {
+                      // just redirect for desktop browsers
+                      return c.redirect(webAppLink, 302)
+                    }
+
 
                     
                     // If we have access tokens (coming back from Supabase function), set the session
