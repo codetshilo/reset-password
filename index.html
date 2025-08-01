@@ -105,7 +105,7 @@
             const refreshToken = urlParams.get('refresh_token');
             const verified = urlParams.get('verified');
             const redirectedFromFunction = accessToken || refreshToken;
-            const userAgent = c.req.header("user-agent") ?? "";
+            const userAgent = navigator.userAgent || "";
             
             React.useEffect(() => {
                 initializePage();
