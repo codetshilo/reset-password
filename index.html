@@ -103,6 +103,7 @@
             const message = urlParams.get('message');
             const accessToken = urlParams.get('access_token');
             const refreshToken = urlParams.get('refresh_token');
+            const verified = urlParams.get('verified');
             const redirectedFromFunction = accessToken || refreshToken;
             const userAgent = c.req.header("user-agent") ?? "";
             
@@ -144,6 +145,14 @@
                     
                         setLoading(false);
                         return;
+                    }
+
+                    // If verified parameter is present, proceed to password reset form
+                    if (token && type === 'recovery' && emailParam && verified === 'true') {
+                      console.log('Parameters verified by Supabase, proceeding to password reset form');
+                      setStep('reset');
+                      setLoading(false);
+                      return;
                     }
 
                     if (userAgent.includes("Android") || userAgent.includes("iPhone")) {
