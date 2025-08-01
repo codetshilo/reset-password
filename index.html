@@ -254,33 +254,6 @@
                 }
             };
             
-            const handleEmailSubmit = (e) => {
-                e.preventDefault();
-                if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                    setError('Please enter a valid email address.');
-                    return;
-                }
-                console.log('Email provided, redirecting to Supabase function');
-                setStep('redirecting');
-                
-                const timeoutId = setTimeout(() => {
-                    console.log('Email submit timeout - assuming server error');
-                    setError('There was an error on our end. Please try again later or request a new password reset link.');
-                    setStep('error');
-                }, 10000);
-                
-                try {
-                    const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=recovery&email=${encodeURIComponent(email)}`;
-                    console.log('Redirecting to:', supabaseUrl);
-                    window.location.href = supabaseUrl;
-                } catch (err) {
-                    clearTimeout(timeoutId);
-                    console.error('Email submit error:', err);
-                    setError('There was an error on our end. Please try again later.');
-                    setStep('error');
-                }
-            };
-            
             const getErrorMessage = (errorCode, customMessage) => {
                 if (customMessage) return customMessage;
                 switch(errorCode) {
