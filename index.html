@@ -10,52 +10,91 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/supabase-js/2.45.0/umd/supabase.min.js"></script>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
         /* Custom animations */
         @keyframes float {
             0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-10px); }
+            50% { transform: translateY(-8px); }
         }
-        
-        @keyframes pulse-slow {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
         }
-        
+
         @keyframes shake {
             0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-5px); }
-            75% { transform: translateX(5px); }
+            25% { transform: translateX(-4px); }
+            75% { transform: translateX(4px); }
         }
-        
+
         .float-animation { animation: float 3s ease-in-out infinite; }
-        .pulse-slow { animation: pulse-slow 2s ease-in-out infinite; }
-        .shake { animation: shake 0.5s ease-in-out; }
-        
+        .pulse { animation: pulse 2s ease-in-out infinite; }
+        .shake { animation: shake 0.4s ease-in-out; }
+
+        /* Gradient backgrounds */
         .gradient-bg {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(145deg, #6b7280 0%, #4b5563 100%);
         }
-        
+
         .success-gradient {
-            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            background: linear-gradient(145deg, #10b981 0%, #34d399 100%);
         }
-        
+
         .error-gradient {
-            background: linear-gradient(135deg, #ff6b6b 0%, #feca57 100%);
+            background: linear-gradient(145deg, #ef4444 0%, #f87171 100%);
         }
-        
+
         .reset-gradient {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            background: linear-gradient(145deg, #3b82f6 0%, #60a5fa 100%);
         }
-        
+
+        /* Enhanced input focus effect */
         .input-focus:focus {
-            transform: scale(1.02);
-            box-shadow: 0 0 20px rgba(79, 172, 254, 0.3);
+            outline: none;
+            ring: 2px;
+            ring-color: #3b82f6;
+            transform: scale(1.01);
+            box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
         }
-        
+
+        /* Strength bar */
         .strength-bar {
-            height: 4px;
-            border-radius: 2px;
+            height: 6px;
+            border-radius: 3px;
+            transition: width 0.4s ease, background-color 0.4s ease;
+        }
+
+        /* Global styles */
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f3f4f6;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-primary {
+            background: linear-gradient(90deg, #3b82f6, #2563eb);
             transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(90deg, #2563eb, #1d4ed8);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(90deg, #6b7280, #4b5563);
+        }
+
+        .btn-secondary:hover {
+            background: linear-gradient(90deg, #4b5563, #374151);
+            transform: translateY(-2px);
         }
     </style>
 </head>
@@ -133,23 +172,20 @@
                         console.log('Redirecting to Supabase function for token verification');
                         setStep('redirecting');
                         
-                        // Add timeout to handle potential server errors
                         const timeoutId = setTimeout(() => {
                             console.log('Redirect timeout - assuming server error');
                             setError('There was an error on our end. Please try again later or request a new password reset link.');
                             setStep('error');
                             setLoading(false);
-                        }, 10000); // 10 second timeout
+                        }, 10000);
                         
                         try {
                             const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}&email=${encodeURIComponent(emailParam)}`;
                             console.log('Redirecting to:', supabaseUrl);
                             
-                            // Try to detect if the redirect failed
                             const startTime = Date.now();
                             window.location.href = supabaseUrl;
                             
-                            // If we're still here after 3 seconds, something went wrong
                             setTimeout(() => {
                                 if (Date.now() - startTime > 3000) {
                                     clearTimeout(timeoutId);
@@ -177,15 +213,13 @@
                         return;
                     }
 
-                    // Skip mobile redirect logic for simplicity
-                    // If needed, define androidAppLink and webAppLink
                     const androidAppLink = 'com.swapmystuff20://auth/login';
                     const webAppLink = 'https://swapmystuff.com/login';
                     if (userAgent.includes("Android") || userAgent.includes("iPhone")) {
                         console.log('Mobile detected, redirecting to app');
                         window.location.href = androidAppLink;
                         setTimeout(() => {
-                            window.location.href = webAppLink; // Fallback
+                            window.location.href = webAppLink;
                         }, 1000);
                         return;
                     }
@@ -229,7 +263,6 @@
                 console.log('Email provided, redirecting to Supabase function');
                 setStep('redirecting');
                 
-                // Add timeout for server error handling
                 const timeoutId = setTimeout(() => {
                     console.log('Email submit timeout - assuming server error');
                     setError('There was an error on our end. Please try again later or request a new password reset link.');
@@ -286,13 +319,13 @@
             
             const getStrengthColor = () => {
                 if (passwordStrength < 40) return 'bg-red-500';
-                if (passwordStrength < 80) return 'bg-yellow-500';
-                return 'bg-green-500';
+                if (passwordStrength < 80) return 'bg-amber-500';
+                return 'bg-emerald-500';
             };
             
             const getStrengthText = () => {
                 if (passwordStrength < 40) return 'Weak';
-                if (passwordStrength < 80) return 'Good';
+                if (passwordStrength < 80) return 'Moderate';
                 return 'Strong';
             };
             
@@ -310,7 +343,6 @@
                             password: password
                         });
                         if (error) {
-                            // Handle specific Supabase errors
                             if (error.message?.includes('Token has expired') || error.message?.includes('invalid')) {
                                 throw new Error('Your password reset session has expired. Please request a new password reset link.');
                             } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
@@ -339,7 +371,6 @@
             };
             
             const requestNewReset = () => {
-                // You can customize this to redirect to your app's reset password flow
                 openApp();
             };
             
@@ -371,12 +402,12 @@
                 const content = getLoadingContent();
                 return (
                     <div className={`min-h-screen flex items-center justify-center p-4 ${getBackgroundGradient()}`}>
-                        <div className="text-center">
-                            <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                            <h1 className="text-white text-2xl font-bold mb-2">{content.title}</h1>
-                            <p className="text-white text-lg font-medium">{content.message}</p>
+                        <div className="text-center card rounded-2xl p-8">
+                            <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+                            <h1 className="text-white text-2xl font-semibold mb-3">{content.title}</h1>
+                            <p className="text-white text-base font-medium opacity-90">{content.message}</p>
                             {step === 'redirecting' && (
-                                <p className="text-white text-sm mt-2 opacity-75">
+                                <p className="text-white text-sm mt-3 opacity-70">
                                     If this takes too long, please try requesting a new reset link.
                                 </p>
                             )}
@@ -387,93 +418,27 @@
             
             if (step === 'emailPrompt') {
                 return (
-                    <div className={`min-h-screen flex items-center justify-center p-4 ${getBackgroundGradient()}`}>
-                        <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 transform transition-all duration-500">
+                    <div className={`min-h-screen flex items-center justify-center p-6 ${getBackgroundGradient()}`}>
+                        <div className="max-w-lg w-full card rounded-2xl shadow-xl p-10">
                             <div className="text-center">
-                                <div className="mx-auto h-20 w-20 rounded-full bg-blue-100 flex items-center justify-center mb-6 pulse-slow">
-                                    <svg className="h-12 w-12 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <div className="mx-auto h-16 w-16 rounded-full bg-blue-50 flex items-center justify-center mb-6 pulse">
+                                    <svg className="h-8 w-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l9-6 9 6v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
                                     </svg>
                                 </div>
-                                <h1 className="text-4xl font-bold text-gray-800 mb-4">📧 Enter Your Email</h1>
-                                <p className="text-gray-600 mb-6 text-lg">
-                                    Please enter the email address associated with your SwapMyStuff account to continue.
+                                <h1 className="text-3xl font-bold text-gray-900 mb-3">Enter Your Email</h1>
+                                <p className="text-gray-600 mb-8 text-base">
+                                    Please enter the email address associated with your SwapMyStuff account.
                                 </p>
                                 
                                 {error && (
-                                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 shake">
-                                        <p className="text-red-800 text-sm">{error}</p>
+                                    <div className="bg-red-50 border border-red-100 rounded-lg p-4 mb-6 shake">
+                                        <p className="text-red-700 text-sm font-medium">{error}</p>
                                     </div>
                                 )}
                                 
                                 <form onSubmit={handleEmailSubmit} className="space-y-6">
                                     <div className="text-left">
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                Confirm Password
-                                            </label>
-                                            <input
-                                                type="password"
-                                                value={confirmPassword}
-                                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                                className="w-full p-4 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none input-focus transition-all duration-200"
-                                                placeholder="Confirm new password"
-                                                required
-                                            />
-                                            {confirmPassword && (
-                                                <div className={`text-xs mt-1 flex items-center ${requirements.match ? 'text-green-600' : 'text-red-500'}`}>
-                                                    <span className="mr-2">{requirements.match ? '✓' : '✗'}</span>
-                                                    Passwords {requirements.match ? 'match' : 'do not match'}
-                                                </div>
-                                            )}
-                                        </div>
-                                        
-                                        <button
-                                            type="submit"
-                                            disabled={isSubmitting || !Object.values(requirements).every(Boolean)}
-                                            className="w-full bg-blue-600 text-white px-8 py-4 rounded-xl hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transform hover:scale-105 transition-all duration-200 font-semibold text-lg shadow-lg"
-                                        >
-                                            {isSubmitting ? (
-                                                <>
-                                                    <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
-                                                    Updating Password...
-                                                </>
-                                            ) : (
-                                                '🔐 Update Password'
-                                            )}
-                                        </button>
-                                    </form>
-                                </>
-                            )}
-                            
-                            <div className="border-t border-gray-200 pt-6 mt-6">
-                                <p className="text-gray-600 text-sm mb-2">
-                                    Don't have the app yet?
-                                </p>
-                                <div className="flex justify-center">
-                                    <a 
-                                        href="https://play.google.com/store/apps/details?id=com.swapmystuff20" 
-                                        className="flex items-center justify-center bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors duration-200 text-sm font-medium"
-                                    >
-                                        📱 Get on Google Play
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div className="fixed inset-0 pointer-events-none overflow-hidden">
-                        <div className="absolute -top-4 -left-4 w-72 h-72 bg-white opacity-10 rounded-full mix-blend-multiply filter blur-xl animate-pulse"></div>
-                        <div className="absolute -bottom-8 -right-4 w-72 h-72 bg-white opacity-10 rounded-full mix-blend-multiply filter blur-xl animate-pulse"></div>
-                    </div>
-                </div>
-            );
-        }
-
-        const root = createRoot(document.getElementById('root'));
-        root.render(<PasswordResetPage />);
-    </script>
-</body>
-</html>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
                                             Email Address
                                         </label>
@@ -481,7 +446,7 @@
                                             type="email"
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
-                                            className="w-full p-4 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none input-focus transition-all duration-200"
+                                            className="w-full p-3.5 border border-gray-200 rounded-lg input-focus transition-all duration-300 bg-white/80 text-gray-900 placeholder-gray-400"
                                             placeholder="Enter your email"
                                             required
                                         />
@@ -490,7 +455,7 @@
                                     <button
                                         type="submit"
                                         disabled={isSubmitting}
-                                        className="w-full bg-blue-600 text-white px-8 py-4 rounded-xl hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transform hover:scale-105 transition-all duration-200 font-semibold text-lg shadow-lg"
+                                        className="w-full btn-primary text-white px-6 py-3.5 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold text-base shadow-md"
                                     >
                                         {isSubmitting ? (
                                             <>
@@ -498,108 +463,106 @@
                                                 Verifying...
                                             </>
                                         ) : (
-                                            '🔐 Continue'
+                                            'Continue'
                                         )}
                                     </button>
                                 </form>
                                 
-                                <div className="border-t border-gray-200 pt-6 mt-6">
-                                    <p className="text-gray-600 text-sm mb-2">
+                                <div className="border-t border-gray-100 pt-6 mt-8">
+                                    <p className="text-gray-600 text-sm mb-3">
                                         Don't have the app yet?
                                     </p>
-                                    <div className="flex justify-center">
-                                        <a 
-                                            href="https://play.google.com/store/apps/details?id=com.swapmystuff20" 
-                                            className="flex items-center justify-center bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors duration-200 text-sm font-medium"
-                                        >
-                                            📱 Get on Google Play
-                                        </a>
-                                    </div>
+                                    <a 
+                                        href="https://play.google.com/store/apps/details?id=com.swapmystuff20" 
+                                        className="inline-flex items-center btn-secondary text-white px-6 py-3 rounded-lg font-medium text-sm shadow-md"
+                                    >
+                                        Get on Google Play
+                                    </a>
                                 </div>
                             </div>
                         </div>
                         
-                        <div className="fixed inset-0 pointer-events-none overflow-hidden">
-                            <div className="absolute -top-4 -left-4 w-72 h-72 bg-white opacity-10 rounded-full mix-blend-multiply filter blur-xl animate-pulse"></div>
-                            <div className="absolute -bottom-8 -right-4 w-72 h-72 bg-white opacity-10 rounded-full mix-blend-multiply filter blur-xl animate-pulse"></div>
+                        <div className="fixed inset-0 pointer-events-none">
+                            <div className="absolute top-0 left-0 w-96 h-96 bg-blue-200 opacity-5 rounded-full blur-3xl animate-pulse"></div>
+                            <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-200 opacity-5 rounded-full blur-3xl animate-pulse"></div>
                         </div>
                     </div>
                 );
             }
             
             return (
-                <div className={`min-h-screen flex items-center justify-center p-4 ${getBackgroundGradient()}`}>
-                    <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 transform transition-all duration-500">
+                <div className={`min-h-screen flex items-center justify-center p-6 ${getBackgroundGradient()}`}>
+                    <div className="max-w-lg w-full card rounded-2xl shadow-xl p-10">
                         <div className="text-center">
                             {step === 'success' ? (
                                 <>
-                                    <div className="mx-auto h-20 w-20 rounded-full bg-green-100 flex items-center justify-center mb-6 float-animation">
-                                        <svg className="h-12 w-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <div className="mx-auto h-16 w-16 rounded-full bg-emerald-50 flex items-center justify-center mb-6 float-animation">
+                                        <svg className="h-8 w-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                                         </svg>
                                     </div>
-                                    <h1 className="text-4xl font-bold text-gray-800 mb-4">🎉 Success!</h1>
-                                    <p className="text-gray-600 mb-6 text-lg">
+                                    <h1 className="text-3xl font-bold text-gray-900 mb-3">Success!</h1>
+                                    <p className="text-gray-600 mb-8 text-base">
                                         Your password has been updated successfully!
                                     </p>
-                                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-                                        <p className="text-green-800 text-sm">
-                                            🔐 You can now sign in with your new password.
+                                    <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-4 mb-8">
+                                        <p className="text-emerald-700 text-sm font-medium">
+                                            You can now sign in with your new password.
                                         </p>
                                     </div>
                                     <button 
                                         onClick={openApp}
-                                        className="w-full bg-green-600 text-white px-8 py-4 rounded-xl hover:bg-green-700 transform hover:scale-105 transition-all duration-200 font-semibold text-lg shadow-lg mb-6"
+                                        className="w-full btn-primary text-white px-6 py-3.5 rounded-lg font-semibold text-base shadow-md"
                                     >
-                                        🚀 Open SwapMyStuff App
+                                        Open SwapMyStuff App
                                     </button>
                                 </>
                             ) : step === 'error' ? (
                                 <>
-                                    <div className="mx-auto h-20 w-20 rounded-full bg-red-100 flex items-center justify-center mb-6">
-                                        <svg className="h-12 w-12 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <div className="mx-auto h-16 w-16 rounded-full bg-red-50 flex items-center justify-center mb-6">
+                                        <svg className="h-8 w-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.268 16.5c-.77.833.192 2.5 1.732 2.5z" />
                                         </svg>
                                     </div>
-                                    <h1 className="text-4xl font-bold text-gray-800 mb-4">⚠️ Oops!</h1>
-                                    <p className="text-gray-600 mb-6 text-lg">
+                                    <h1 className="text-3xl font-bold text-gray-900 mb-3">Oops!</h1>
+                                    <p className="text-gray-600 mb-8 text-base">
                                         {error}
                                     </p>
-                                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
-                                        <p className="text-amber-800 text-sm">
-                                            💡 You can request a new password reset from the SwapMyStuff app.
+                                    <div className="bg-amber-50 border border-amber-100 rounded-lg p-4 mb-8">
+                                        <p className="text-amber-700 text-sm font-medium">
+                                            You can request a new password reset from the SwapMyStuff app.
                                         </p>
                                     </div>
                                     <div className="space-y-3">
                                         <button 
                                             onClick={requestNewReset}
-                                            className="w-full bg-blue-600 text-white px-8 py-4 rounded-xl hover:bg-blue-700 transform hover:scale-105 transition-all duration-200 font-semibold text-lg shadow-lg"
+                                            className="w-full btn-primary text-white px-6 py-3.5 rounded-lg font-semibold text-base shadow-md"
                                         >
-                                            🔄 Request New Reset Link
+                                            Request New Reset Link
                                         </button>
                                         <button 
                                             onClick={openApp}
-                                            className="w-full bg-gray-600 text-white px-8 py-3 rounded-xl hover:bg-gray-700 transform hover:scale-105 transition-all duration-200 font-medium shadow-lg"
+                                            className="w-full btn-secondary text-white px-6 py-3 rounded-lg font-medium text-base shadow-md"
                                         >
-                                            🚀 Open SwapMyStuff App
+                                            Open SwapMyStuff App
                                         </button>
                                     </div>
                                 </>
                             ) : (
                                 <>
-                                    <div className="mx-auto h-20 w-20 rounded-full bg-blue-100 flex items-center justify-center mb-6 pulse-slow">
-                                        <svg className="h-12 w-12 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <div className="mx-auto h-16 w-16 rounded-full bg-blue-50 flex items-center justify-center mb-6 pulse">
+                                        <svg className="h-8 w-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-1a2 2 0 00-2-2H6a2 2 0 00-2 2v1a2 2 0 002 2zM12 9a3 3 0 100-6 3 3 0 000 6z" />
                                         </svg>
                                     </div>
-                                    <h1 className="text-4xl font-bold text-gray-800 mb-4">🔐 Reset Password</h1>
-                                    <p className="text-gray-600 mb-6 text-lg">
+                                    <h1 className="text-3xl font-bold text-gray-900 mb-3">Reset Password</h1>
+                                    <p className="text-gray-600 mb-8 text-base">
                                         Enter your new password below.
                                     </p>
                                     
                                     {error && (
-                                        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 shake">
-                                            <p className="text-red-800 text-sm">{error}</p>
+                                        <div className="bg-red-50 border border-red-100 rounded-lg p-4 mb-6 shake">
+                                            <p className="text-red-700 text-sm font-medium">{error}</p>
                                         </div>
                                     )}
                                     
@@ -612,46 +575,95 @@
                                                 type="password"
                                                 value={password}
                                                 onChange={(e) => setPassword(e.target.value)}
-                                                className="w-full p-4 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none input-focus transition-all duration-200"
+                                                className="w-full p-3.5 border border-gray-200 rounded-lg input-focus transition-all duration-300 bg-white/80 text-gray-900 placeholder-gray-400"
                                                 placeholder="Enter new password"
                                                 required
                                             />
                                             
                                             {password && (
-                                                <div className="mt-2">
-                                                    <div className="flex justify-between items-center mb-1">
-                                                        <span className="text-xs text-gray-600">Password Strength</span>
-                                                        <span className={`text-xs font-medium ${passwordStrength < 40 ? 'text-red-500' : passwordStrength < 80 ? 'text-yellow-500' : 'text-green-500'}`}>
+                                                <div className="mt-3">
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <span className="text-sm text-gray-600 font-medium">Password Strength</span>
+                                                        <span className={`text-sm font-semibold ${passwordStrength < 40 ? 'text-red-500' : passwordStrength < 80 ? 'text-amber-500' : 'text-emerald-500'}`}>
                                                             {getStrengthText()}
                                                         </span>
                                                     </div>
-                                                    <div className="w-full bg-gray-200 rounded-full h-2">
+                                                    <div className="w-full bg-gray-100 rounded-full h-2">
                                                         <div 
-                                                            className={`strength-bar rounded-full ${getStrengthColor()}`}
+                                                            className={`strength-bar ${getStrengthColor()}`}
                                                             style={{ width: `${passwordStrength}%` }}
                                                         ></div>
                                                     </div>
                                                 </div>
                                             )}
                                             
-                                            <div className="mt-3 space-y-1">
-                                                <div className={`text-xs flex items-center ${requirements.length ? 'text-green-600' : 'text-gray-400'}`}>
-                                                    <span className="mr-2">{requirements.length ? '✓' : '○'}</span>
+                                            <div className="mt-4 space-y-2">
+                                                <div className={`text-sm flex items-center ${requirements.length ? 'text-emerald-600' : 'text-gray-500'}`}>
+                                                    <span className="mr-2 text-lg">{requirements.length ? '✓' : '○'}</span>
                                                     At least 8 characters
                                                 </div>
-                                                <div className={`text-xs flex items-center ${requirements.upper ? 'text-green-600' : 'text-gray-400'}`}>
-                                                    <span className="mr-2">{requirements.upper ? '✓' : '○'}</span>
+                                                <div className={`text-sm flex items-center ${requirements.upper ? 'text-emerald-600' : 'text-gray-500'}`}>
+                                                    <span className="mr-2 text-lg">{requirements.upper ? '✓' : '○'}</span>
                                                     One uppercase letter
                                                 </div>
-                                                <div className={`text-xs flex items-center ${requirements.lower ? 'text-green-600' : 'text-gray-400'}`}>
-                                                    <span className="mr-2">{requirements.lower ? '✓' : '○'}</span>
+                                                <div className={`text-sm flex items-center ${requirements.lower ? 'text-emerald-600' : 'text-gray-500'}`}>
+                                                    <span className="mr-2 text-lg">{requirements.lower ? '✓' : '○'}</span>
                                                     One lowercase letter
                                                 </div>
-                                                <div className={`text-xs flex items-center ${requirements.number ? 'text-green-600' : 'text-gray-400'}`}>
-                                                    <span className="mr-2">{requirements.number ? '✓' : '○'}</span>
+                                                <div className={`text-sm flex items-center ${requirements.number ? 'text-emerald-600' : 'text-gray-500'}`}>
+                                                    <span className="mr-2 text-lg">{requirements.number ? '✓' : '○'}</span>
                                                     One number
                                                 </div>
                                             </div>
                                         </div>
                                         
                                         <div className="text-left">
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Confirm Password
+                                            </label>
+                                            <input
+                                                type="password"
+                                                value={confirmPassword}
+                                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                                className="w-full p-3.5 border border-gray-200 rounded-lg input-focus transition-all duration-300 bg-white/80 text-gray-900 placeholder-gray-400"
+                                                placeholder="Confirm new password"
+                                                required
+                                            />
+                                            {confirmPassword && (
+                                                <div className="mt-2 text-sm flex items-center">
+                                                    <span className="mr-2 text-lg">{requirements.match ? '✓' : '○'}</span>
+                                                    <span className={requirements.match ? 'text-emerald-600' : 'text-gray-500'}>
+                                                        Passwords match
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+                                        
+                                        <button
+                                            type="submit"
+                                            disabled={isSubmitting}
+                                            className="w-full btn-primary text-white px-6 py-3.5 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold text-base shadow-md"
+                                        >
+                                            {isSubmitting ? (
+                                                <>
+                                                    <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
+                                                    Resetting...
+                                                </>
+                                            ) : (
+                                                'Reset Password'
+                                            )}
+                                        </button>
+                                    </form>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<PasswordResetPage />);
+    </script>
+</body>
+</html>
