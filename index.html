@@ -158,7 +158,7 @@
                         
                         // Show redirecting message briefly, then redirect
                         setTimeout(() => {
-                            const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}`;
+                            const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}&email=${email}`;
                             console.log('Redirecting to:', supabaseUrl);
                             window.location.href = supabaseUrl;
                         }, 1500);
