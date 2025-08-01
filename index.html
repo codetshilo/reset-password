@@ -154,14 +154,6 @@
                         return;
                     }
                     
-                    // If we have a token and type but no email, prompt for email
-                    if (token && type === 'recovery' && !emailParam) {
-                        console.log('Email missing, prompting for email input');
-                        setStep('emailPrompt');
-                        setLoading(false);
-                        return;
-                    }
-                    
                     // If we have a token, type, and email, redirect to Supabase function
                     if (token && type === 'recovery' && emailParam) {
                         console.log('Redirecting to Supabase function for token verification');
