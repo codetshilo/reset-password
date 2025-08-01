@@ -67,9 +67,10 @@
     <script type="text/babel">
         function PasswordResetPage() {
             const [loading, setLoading] = React.useState(true);
-            const [step, setStep] = React.useState('loading'); // loading, redirecting, reset, success, error
+            const [step, setStep] = React.useState('loading'); // loading, redirecting, emailPrompt, reset, success, error
             const [password, setPassword] = React.useState('');
             const [confirmPassword, setConfirmPassword] = React.useState('');
+            const [email, setEmail] = React.useState('');
             const [isSubmitting, setIsSubmitting] = React.useState(false);
             const [error, setError] = React.useState('');
             const [passwordStrength, setPasswordStrength] = React.useState(0);
@@ -97,6 +98,7 @@
             const urlParams = new URLSearchParams(window.location.search);
             const token = urlParams.get('token');
             const type = urlParams.get('type');
+            const emailParam = urlParams.get('email');
             const errorParam = urlParams.get('error');
             const message = urlParams.get('message');
             const accessToken = urlParams.get('access_token');
@@ -115,6 +117,7 @@
                     console.log('Initializing with params:', { 
                         hasToken: !!token, 
                         type, 
+                        email: emailParam,
                         hasAccessToken: !!accessToken,
                         hasError: !!errorParam 
                     });
@@ -151,14 +154,22 @@
                         return;
                     }
                     
-                    // If we have a token but no access token, redirect to Supabase function
-                    if (token && type === 'recovery') {
+                    // If we have a token and type but no email, prompt for email
+                    if (token && type === 'recovery' && !emailParam) {
+                        console.log('Email missing, prompting for email input');
+                        setStep('emailPrompt');
+                        setLoading(false);
+                        return;
+                    }
+                    
+                    // If we have a token, type, and email, redirect to Supabase function
+                    if (token && type === 'recovery' && emailParam) {
                         console.log('Redirecting to Supabase function for token verification');
                         setStep('redirecting');
                         
                         // Show redirecting message briefly, then redirect
                         setTimeout(() => {
-                            const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}&email=${email}`;
+                            const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}&email=${encodeURIComponent(emailParam)}`;
                             console.log('Redirecting to:', supabaseUrl);
                             window.location.href = supabaseUrl;
                         }, 1500);
@@ -177,6 +188,21 @@
                 } finally {
                     setLoading(false);
                 }
+            };
+            
+            const handleEmailSubmit = (e) => {
+                e.preventDefault();
+                if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                    setError('Please enter a valid email address.');
+                    return;
+                }
+                console.log('Email provided, redirecting to Supabase function');
+                setStep('redirecting');
+                setTimeout(() => {
+                    const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=recovery&email=${encodeURIComponent(email)}`;
+                    console.log('Redirecting to:', supabaseUrl);
+                    window.location.href = supabaseUrl;
+                }, 1500);
             };
             
             const getErrorMessage = (errorCode, customMessage) => {
@@ -270,6 +296,7 @@
                     case 'error': return 'error-gradient';
                     case 'reset': return 'reset-gradient';
                     case 'redirecting': return 'gradient-bg';
+                    case 'emailPrompt': return 'gradient-bg';
                     default: return 'gradient-bg';
                 }
             };
@@ -295,6 +322,82 @@
                             <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                             <h1 className="text-white text-2xl font-bold mb-2">{content.title}</h1>
                             <p className="text-white text-lg font-medium">{content.message}</p>
+                        </div>
+                    </div>
+                );
+            }
+            
+            if (step === 'emailPrompt') {
+                return (
+                    <div className={`min-h-screen flex items-center justify-center p-4 ${getBackgroundGradient()}`}>
+                        <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 transform transition-all duration-500">
+                            <div className="text-center">
+                                <div className="mx-auto h-20 w-20 rounded-full bg-blue-100 flex items-center justify-center mb-6 pulse-slow">
+                                    <svg className="h-12 w-12 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l9-6 9 6v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+                                    </svg>
+                                </div>
+                                <h1 className="text-4xl font-bold text-gray-800 mb-4">📧 Enter Your Email</h1>
+                                <p className="text-gray-600 mb-6 text-lg">
+                                    Please enter the email address associated with your SwapMyStuff account to continue.
+                                </p>
+                                
+                                {error && (
+                                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 shake">
+                                        <p className="text-red-800 text-sm">{error}</p>
+                                    </div>
+                                )}
+                                
+                                <form onSubmit={handleEmailSubmit} className="space-y-6">
+                                    <div className="text-left">
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Email Address
+                                        </label>
+                                        <input
+                                            type="email"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            className="w-full p-4 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none input-focus transition-all duration-200"
+                                            placeholder="Enter your email"
+                                            required
+                                        />
+                                    </div>
+                                    
+                                    <button
+                                        type="submit"
+                                        disabled={isSubmitting}
+                                        className="w-full bg-blue-600 text-white px-8 py-4 rounded-xl hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transform hover:scale-105 transition-all duration-200 font-semibold text-lg shadow-lg"
+                                    >
+                                        {isSubmitting ? (
+                                            <>
+                                                <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
+                                                Verifying...
+                                            </>
+                                        ) : (
+                                            '🔐 Continue'
+                                        )}
+                                    </button>
+                                </form>
+                                
+                                <div className="border-t border-gray-200 pt-6 mt-6">
+                                    <p className="text-gray-600 text-sm mb-2">
+                                        Don't have the app yet?
+                                    </p>
+                                    <div className="flex justify-center">
+                                        <a 
+                                            href="https://play.google.com/store/apps/details?id=com.swapmystuff20" 
+                                            className="flex items-center justify-center bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors duration-200 text-sm font-medium"
+                                        >
+                                            📱 Get on Google Play
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+                            <div className="absolute -top-4 -left-4 w-72 h-72 bg-white opacity-10 rounded-full mix-blend-multiply filter blur-xl animate-pulse"></div>
+                            <div className="absolute -bottom-8 -right-4 w-72 h-72 bg-white opacity-10 rounded-full mix-blend-multiply filter blur-xl animate-pulse"></div>
                         </div>
                     </div>
                 );
