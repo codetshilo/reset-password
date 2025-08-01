@@ -31,7 +31,6 @@
         .pulse-slow { animation: pulse-slow 2s ease-in-out infinite; }
         .shake { animation: shake 0.5s ease-in-out; }
         
-        /* Gradient backgrounds */
         .gradient-bg {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
@@ -48,13 +47,11 @@
             background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
         }
         
-        /* Input focus effects */
         .input-focus:focus {
             transform: scale(1.02);
             box-shadow: 0 0 20px rgba(79, 172, 254, 0.3);
         }
         
-        /* Password strength indicator */
         .strength-bar {
             height: 4px;
             border-radius: 2px;
@@ -65,9 +62,11 @@
 <body>
     <div id="root"></div>
     <script type="text/babel">
+        const { createRoot } = ReactDOM;
+
         function PasswordResetPage() {
             const [loading, setLoading] = React.useState(true);
-            const [step, setStep] = React.useState('loading'); // loading, redirecting, emailPrompt, reset, success, error
+            const [step, setStep] = React.useState('loading');
             const [password, setPassword] = React.useState('');
             const [confirmPassword, setConfirmPassword] = React.useState('');
             const [email, setEmail] = React.useState('');
@@ -82,7 +81,6 @@
                 match: false
             });
             
-            // Initialize Supabase only if available
             let supabase = null;
             try {
                 if (window.supabase) {
@@ -94,7 +92,6 @@
                 console.warn('Supabase not available:', e);
             }
             
-            // Get URL parameters
             const urlParams = new URLSearchParams(window.location.search);
             const token = urlParams.get('token');
             const type = urlParams.get('type');
@@ -125,7 +122,6 @@
                         hasError: !!errorParam 
                     });
 
-                    // Check for direct errors first
                     if (errorParam) {
                         setError(getErrorMessage(errorParam, message));
                         setStep('error');
@@ -136,36 +132,35 @@
                     if (token && type === 'recovery' && emailParam && !redirectedFromFunction) {
                         console.log('Redirecting to Supabase function for token verification');
                         setStep('redirecting');
-                    
                         setTimeout(() => {
                             const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}&email=${encodeURIComponent(emailParam)}`;
                             console.log('Redirecting to:', supabaseUrl);
                             window.location.href = supabaseUrl;
                         }, 1500);
-                    
                         setLoading(false);
                         return;
                     }
 
-                    // If verified parameter is present, proceed to password reset form
                     if (token && type === 'recovery' && emailParam && verified === 'true') {
-                      console.log('Parameters verified by Supabase, proceeding to password reset form');
-                      setStep('reset');
-                      setLoading(false);
-                      return;
+                        console.log('Parameters verified by Supabase, proceeding to password reset form');
+                        setStep('reset');
+                        setLoading(false);
+                        return;
                     }
 
+                    // Skip mobile redirect logic for simplicity
+                    // If needed, define androidAppLink and webAppLink
+                    const androidAppLink = 'com.swapmystuff20://auth/login';
+                    const webAppLink = 'https://swapmystuff.com/login';
                     if (userAgent.includes("Android") || userAgent.includes("iPhone")) {
-                      // show fallback HTML to attempt opening the app
-                      return c.html(renderRedirectPage({ androidAppLink, webAppLink, email }))
-                    } else {
-                      // just redirect for desktop browsers
-                      return c.redirect(webAppLink, 302)
+                        console.log('Mobile detected, redirecting to app');
+                        window.location.href = androidAppLink;
+                        setTimeout(() => {
+                            window.location.href = webAppLink; // Fallback
+                        }, 1000);
+                        return;
                     }
 
-
-                    
-                    // If we have access tokens (coming back from Supabase function), set the session
                     if (accessToken && type === 'recovery' && supabase) {
                         console.log('Setting session with access token');
                         try {
@@ -173,11 +168,7 @@
                                 access_token: accessToken,
                                 refresh_token: refreshToken || ''
                             });
-                            
-                            if (error) {
-                                throw error;
-                            }
-                            
+                            if (error) throw error;
                             console.log('Session set successfully:', data.user?.id);
                             setStep('reset');
                         } catch (err) {
@@ -188,24 +179,7 @@
                         setLoading(false);
                         return;
                     }
-                    
-                    // If we have a token, type, and email, redirect to Supabase function
-                    if (token && type === 'recovery' && emailParam) {
-                        console.log('Redirecting to Supabase function for token verification');
-                        setStep('redirecting');
-                        
-                        // Show redirecting message briefly, then redirect
-                        setTimeout(() => {
-                            const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}&email=${encodeURIComponent(emailParam)}`;
-                            console.log('Redirecting to:', supabaseUrl);
-                            window.location.href = supabaseUrl;
-                        }, 1500);
-                        
-                        setLoading(false);
-                        return;
-                    }
-                    
-                    // No valid parameters
+
                     setError('Invalid password reset link. Please request a new password reset from the app.');
                     setStep('error');
                 } catch (err) {
@@ -234,7 +208,6 @@
             
             const getErrorMessage = (errorCode, customMessage) => {
                 if (customMessage) return customMessage;
-                
                 switch(errorCode) {
                     case 'expired':
                         return 'The password reset link has expired. Please request a new one from the app.';
@@ -256,10 +229,7 @@
                     number: /\d/.test(password),
                     match: password === confirmPassword && password.length > 0
                 };
-                
                 setRequirements(newRequirements);
-                
-                // Calculate strength (0-100)
                 const metRequirements = Object.values(newRequirements).filter(Boolean).length;
                 const strength = Math.round((metRequirements / 5) * 100);
                 setPasswordStrength(strength);
@@ -279,25 +249,18 @@
             
             const handleSubmit = async (e) => {
                 e.preventDefault();
-                
                 if (!Object.values(requirements).every(Boolean)) {
                     setError('Please meet all password requirements.');
                     return;
                 }
-                
                 setIsSubmitting(true);
                 setError('');
-                
                 try {
                     if (supabase) {
                         const { error } = await supabase.auth.updateUser({
                             password: password
                         });
-                        
-                        if (error) {
-                            throw error;
-                        }
-                        
+                        if (error) throw error;
                         console.log('Password updated successfully');
                         setStep('success');
                     } else {
@@ -512,7 +475,6 @@
                                                 required
                                             />
                                             
-                                            {/* Password strength indicator */}
                                             {password && (
                                                 <div className="mt-2">
                                                     <div className="flex justify-between items-center mb-1">
@@ -530,7 +492,6 @@
                                                 </div>
                                             )}
                                             
-                                            {/* Requirements checklist */}
                                             <div className="mt-3 space-y-1">
                                                 <div className={`text-xs flex items-center ${requirements.length ? 'text-green-600' : 'text-gray-400'}`}>
                                                     <span className="mr-2">{requirements.length ? '✓' : '○'}</span>
@@ -605,7 +566,6 @@
                         </div>
                     </div>
                     
-                    {/* Background decorative elements */}
                     <div className="fixed inset-0 pointer-events-none overflow-hidden">
                         <div className="absolute -top-4 -left-4 w-72 h-72 bg-white opacity-10 rounded-full mix-blend-multiply filter blur-xl animate-pulse"></div>
                         <div className="absolute -bottom-8 -right-4 w-72 h-72 bg-white opacity-10 rounded-full mix-blend-multiply filter blur-xl animate-pulse"></div>
@@ -614,7 +574,8 @@
             );
         }
 
-        ReactDOM.render(<PasswordResetPage />, document.getElementById('root'));
+        const root = createRoot(document.getElementById('root'));
+        root.render(<PasswordResetPage />);
     </script>
 </body>
 </html>
