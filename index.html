@@ -103,6 +103,7 @@
             const message = urlParams.get('message');
             const accessToken = urlParams.get('access_token');
             const refreshToken = urlParams.get('refresh_token');
+            const redirectedFromFunction = accessToken || refreshToken;
             
             React.useEffect(() => {
                 initializePage();
@@ -129,6 +130,21 @@
                         setLoading(false);
                         return;
                     }
+
+                    if (token && type === 'recovery' && emailParam && !redirectedFromFunction) {
+                        console.log('Redirecting to Supabase function for token verification');
+                        setStep('redirecting');
+                    
+                        setTimeout(() => {
+                            const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}&email=${encodeURIComponent(emailParam)}`;
+                            console.log('Redirecting to:', supabaseUrl);
+                            window.location.href = supabaseUrl;
+                        }, 1500);
+                    
+                        setLoading(false);
+                        return;
+                    }
+
                     
                     // If we have access tokens (coming back from Supabase function), set the session
                     if (accessToken && type === 'recovery' && supabase) {
