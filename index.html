@@ -67,7 +67,7 @@
     <script type="text/babel">
         function PasswordResetPage() {
             const [loading, setLoading] = React.useState(true);
-            const [step, setStep] = React.useState('loading'); // loading, verify, reset, success, error
+            const [step, setStep] = React.useState('loading'); // loading, redirecting, reset, success, error
             const [password, setPassword] = React.useState('');
             const [confirmPassword, setConfirmPassword] = React.useState('');
             const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -112,6 +112,13 @@
             
             const initializePage = async () => {
                 try {
+                    console.log('Initializing with params:', { 
+                        hasToken: !!token, 
+                        type, 
+                        hasAccessToken: !!accessToken,
+                        hasError: !!errorParam 
+                    });
+
                     // Check for direct errors first
                     if (errorParam) {
                         setError(getErrorMessage(errorParam, message));
@@ -120,13 +127,20 @@
                         return;
                     }
                     
-                    // If we have access tokens, set the session
+                    // If we have access tokens (coming back from Supabase function), set the session
                     if (accessToken && type === 'recovery' && supabase) {
+                        console.log('Setting session with access token');
                         try {
-                            await supabase.auth.setSession({
+                            const { data, error } = await supabase.auth.setSession({
                                 access_token: accessToken,
                                 refresh_token: refreshToken || ''
                             });
+                            
+                            if (error) {
+                                throw error;
+                            }
+                            
+                            console.log('Session set successfully:', data.user?.id);
                             setStep('reset');
                         } catch (err) {
                             console.error('Session error:', err);
@@ -137,30 +151,25 @@
                         return;
                     }
                     
-                    // If we have a token but no access token, verify it via our edge function
+                    // If we have a token but no access token, redirect to Supabase function
                     if (token && type === 'recovery') {
-                        try {
-                            const response = await fetch(
-                                `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}`,
-                                { method: 'GET', redirect: 'manual' }
-                            );
-                            
-                            // This should redirect, but if it doesn't, there might be an issue
-                            if (response.status === 0 || response.type === 'opaqueredirect') {
-                                // The redirect happened, but we're still here - might be a browser security issue
-                                setError('Please enable redirects in your browser and try the link again.');
-                                setStep('error');
-                            }
-                        } catch (err) {
-                            console.error('Token verification error:', err);
-                            setError('Failed to verify reset token. Please request a new password reset.');
-                            setStep('error');
-                        }
-                    } else {
-                        // No valid parameters
-                        setError('Invalid password reset link. Please request a new password reset from the app.');
-                        setStep('error');
+                        console.log('Redirecting to Supabase function for token verification');
+                        setStep('redirecting');
+                        
+                        // Show redirecting message briefly, then redirect
+                        setTimeout(() => {
+                            const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}`;
+                            console.log('Redirecting to:', supabaseUrl);
+                            window.location.href = supabaseUrl;
+                        }, 1500);
+                        
+                        setLoading(false);
+                        return;
                     }
+                    
+                    // No valid parameters
+                    setError('Invalid password reset link. Please request a new password reset from the app.');
+                    setStep('error');
                 } catch (err) {
                     console.error('Initialization error:', err);
                     setError('An unexpected error occurred. Please try again.');
@@ -235,12 +244,12 @@
                         if (error) {
                             throw error;
                         }
+                        
+                        console.log('Password updated successfully');
+                        setStep('success');
                     } else {
-                        // Fallback if Supabase isn't available
                         throw new Error('Authentication service not available');
                     }
-                    
-                    setStep('success');
                 } catch (err) {
                     console.error('Password update error:', err);
                     setError(err.message || 'Failed to update password. Please try again.');
@@ -251,28 +260,45 @@
             
             const openApp = () => {
                 const deepLink = 'com.swapmystuff20://auth/login';
+                console.log('Opening app with deep link:', deepLink);
                 window.location.href = deepLink;
             };
-            
-            if (loading) {
-                return (
-                    <div className="min-h-screen gradient-bg flex items-center justify-center p-4">
-                        <div className="text-center">
-                            <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                            <p className="text-white text-lg font-medium">Verifying reset link...</p>
-                        </div>
-                    </div>
-                );
-            }
             
             const getBackgroundGradient = () => {
                 switch(step) {
                     case 'success': return 'success-gradient';
                     case 'error': return 'error-gradient';
                     case 'reset': return 'reset-gradient';
+                    case 'redirecting': return 'gradient-bg';
                     default: return 'gradient-bg';
                 }
             };
+
+            const getLoadingContent = () => {
+                if (step === 'redirecting') {
+                    return {
+                        title: '🔄 Redirecting...',
+                        message: 'Taking you to the secure verification page...'
+                    };
+                }
+                return {
+                    title: '🔐 Verifying reset link...',
+                    message: 'Please wait while we process your request...'
+                };
+            };
+            
+            if (loading || step === 'redirecting') {
+                const content = getLoadingContent();
+                return (
+                    <div className={`min-h-screen flex items-center justify-center p-4 ${getBackgroundGradient()}`}>
+                        <div className="text-center">
+                            <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                            <h1 className="text-white text-2xl font-bold mb-2">{content.title}</h1>
+                            <p className="text-white text-lg font-medium">{content.message}</p>
+                        </div>
+                    </div>
+                );
+            }
             
             return (
                 <div className={`min-h-screen flex items-center justify-center p-4 ${getBackgroundGradient()}`}>
@@ -458,7 +484,6 @@
             );
         }
 
-        // Use the same rendering method as the working email verification page
         ReactDOM.render(<PasswordResetPage />, document.getElementById('root'));
     </script>
 </body>
