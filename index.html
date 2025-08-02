@@ -1,642 +1,466 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SwapMyStuff - Reset Password</title>
-    <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.20.15/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/supabase-js/2.45.0/umd/supabase.min.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+const { createRoot } = ReactDOM;
 
-        /* Custom animations */
-        @keyframes float {
-            0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-8px); }
+function PasswordResetPage() {
+    const [loading, setLoading] = React.useState(true);
+    const [step, setStep] = React.useState('loading');
+    const [password, setPassword] = React.useState('');
+    const [confirmPassword, setConfirmPassword] = React.useState('');
+    const [isSubmitting, setIsSubmitting] = React.useState(false);
+    const [error, setError] = React.useState('');
+    const [passwordStrength, setPasswordStrength] = React.useState(0);
+    const [requirements, setRequirements] = React.useState({
+        length: false,
+        upper: false,
+        lower: false,
+        number: false,
+        match: false
+    });
+
+    let supabase = null;
+    try {
+        if (window.supabase) {
+            const supabaseUrl = 'https://vmdsqcwgrivjaxikiabr.supabase.co';
+            const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtZHNxY3dncml2amF4aWtpYWJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ3MDU1NjcsImV4cCI6MjA1MDI4MTU2N30.6oSx_XpqwNB0FzRnNVfhW91U8FO7QGBL0r9Q5zxKqDg';
+            supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+        }
+    } catch (e) {
+        console.warn('Supabase not available:', e);
+    }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    const type = urlParams.get('type');
+    const emailParam = urlParams.get('email');
+    const errorParam = urlParams.get('error');
+    const message = urlParams.get('message');
+    const accessToken = urlParams.get('access_token');
+    const refreshToken = urlParams.get('refresh_token');
+    const verified = urlParams.get('verified');
+    const redirectedFromFunction = accessToken || refreshToken;
+    const userAgent = navigator.userAgent || "";
+
+    React.useEffect(() => {
+        initializePage();
+    }, []);
+
+    React.useEffect(() => {
+        validatePassword();
+    }, [password, confirmPassword]);
+
+    const initializePage = async () => {
+        if (window.redirected) {
+            console.log('Duplicate page initialization prevented');
+            setError('This reset link is already being processed. Please use the open tab or request a new link.');
+            setStep('error');
+            setLoading(false);
+            return;
+        }
+        window.redirected = true;
+
+        const lastAttemptKey = `lastRedirect_${token || 'default'}`;
+        const lastAttempt = localStorage.getItem(lastAttemptKey);
+        if (lastAttempt && Date.now() - parseInt(lastAttempt) < 30000) {
+            console.log('Rate-limited redirect attempt for token:', token ? token.substring(0, 4) + '****' : 'none');
+            setError('Please wait 30 seconds before retrying this link.');
+            setStep('error');
+            setLoading(false);
+            return;
         }
 
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-        }
-
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-4px); }
-            75% { transform: translateX(4px); }
-        }
-
-        .float-animation { animation: float 3s ease-in-out infinite; }
-        .pulse { animation: pulse 2s ease-in-out infinite; }
-        .shake { animation: shake 0.4s ease-in-out; }
-
-        /* Gradient backgrounds */
-        .gradient-bg {
-            background: linear-gradient(145deg, #6b7280 0%, #4b5563 100%);
-        }
-
-        .success-gradient {
-            background: linear-gradient(145deg, #10b981 0%, #34d399 100%);
-        }
-
-        .error-gradient {
-            background: linear-gradient(145deg, #ef4444 0%, #f87171 100%);
-        }
-
-        .reset-gradient {
-            background: linear-gradient(145deg, #3b82f6 0%, #60a5fa 100%);
-        }
-
-        /* Enhanced input focus effect */
-        .input-focus:focus {
-            outline: none;
-            ring: 2px;
-            ring-color: #3b82f6;
-            transform: scale(1.01);
-            box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
-        }
-
-        /* Strength bar */
-        .strength-bar {
-            height: 6px;
-            border-radius: 3px;
-            transition: width 0.4s ease, background-color 0.4s ease;
-        }
-
-        /* Global styles */
-        body {
-            font-family: 'Inter', sans-serif;
-            background: #f3f4f6;
-        }
-
-        .card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .btn-primary {
-            background: linear-gradient(90deg, #3b82f6, #2563eb);
-            transition: all 0.3s ease;
-        }
-
-        .btn-primary:hover {
-            background: linear-gradient(90deg, #2563eb, #1d4ed8);
-            transform: translateY(-2px);
-        }
-
-        .btn-secondary {
-            background: linear-gradient(90deg, #6b7280, #4b5563);
-        }
-
-        .btn-secondary:hover {
-            background: linear-gradient(90deg, #4b5563, #374151);
-            transform: translateY(-2px);
-        }
-    </style>
-</head>
-<body>
-    <div id="root"></div>
-    <script type="text/babel">
-        const { createRoot } = ReactDOM;
-
-        function PasswordResetPage() {
-            const [loading, setLoading] = React.useState(true);
-            const [step, setStep] = React.useState('loading');
-            const [password, setPassword] = React.useState('');
-            const [confirmPassword, setConfirmPassword] = React.useState('');
-            const [email, setEmail] = React.useState('');
-            const [isSubmitting, setIsSubmitting] = React.useState(false);
-            const [error, setError] = React.useState('');
-            const [passwordStrength, setPasswordStrength] = React.useState(0);
-            const [requirements, setRequirements] = React.useState({
-                length: false,
-                upper: false,
-                lower: false,
-                number: false,
-                match: false
+        try {
+            console.log('Initializing with params:', { 
+                hasToken: !!token, 
+                type, 
+                email: emailParam,
+                hasAccessToken: !!accessToken,
+                hasError: !!errorParam 
             });
-            
-            let supabase = null;
-            try {
-                if (window.supabase) {
-                    const supabaseUrl = 'https://vmdsqcwgrivjaxikiabr.supabase.co';
-                    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtZHNxY3dncml2amF4aWtpYWJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ3MDU1NjcsImV4cCI6MjA1MDI4MTU2N30.6oSx_XpqwNB0FzRnNVfhW91U8FO7QGBL0r9Q5zxKqDg';
-                    supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
-                }
-            } catch (e) {
-                console.warn('Supabase not available:', e);
+
+            if (errorParam) {
+                setError(getErrorMessage(errorParam, message));
+                setStep('error');
+                setLoading(false);
+                return;
             }
-            
-            const urlParams = new URLSearchParams(window.location.search);
-            const token = urlParams.get('token');
-            const type = urlParams.get('type');
-            const emailParam = urlParams.get('email');
-            const errorParam = urlParams.get('error');
-            const message = urlParams.get('message');
-            const accessToken = urlParams.get('access_token');
-            const refreshToken = urlParams.get('refresh_token');
-            const verified = urlParams.get('verified');
-            const redirectedFromFunction = accessToken || refreshToken;
-            const userAgent = navigator.userAgent || "";
-            
-            React.useEffect(() => {
-                initializePage();
-            }, []);
-            
-            React.useEffect(() => {
-                validatePassword();
-            }, [password, confirmPassword]);
-            
-            const initializePage = async () => {
+
+            if (token && type === 'recovery' && emailParam && !redirectedFromFunction) {
+                console.log('Redirecting to Supabase function for token verification');
+                setStep('redirecting');
+                const timeoutId = setTimeout(() => {
+                    console.log('Redirect timeout - assuming server error');
+                    setError('There was an error on our end. Please try again later or request a new password reset link.');
+                    setStep('error');
+                    setLoading(false);
+                }, 10000);
                 try {
-                    console.log('Initializing with params:', { 
-                        hasToken: !!token, 
-                        type, 
-                        email: emailParam,
-                        hasAccessToken: !!accessToken,
-                        hasError: !!errorParam 
-                    });
-
-                    if (errorParam) {
-                        setError(getErrorMessage(errorParam, message));
-                        setStep('error');
-                        setLoading(false);
-                        return;
-                    }
-
-                    if (token && type === 'recovery' && emailParam && !redirectedFromFunction) {
-                        console.log('Redirecting to Supabase function for token verification');
-                        setStep('redirecting');
-                        
-                        const timeoutId = setTimeout(() => {
-                            console.log('Redirect timeout - assuming server error');
-                            setError('There was an error on our end. Please try again later or request a new password reset link.');
-                            setStep('error');
-                            setLoading(false);
-                        }, 10000);
-                        
-                        try {
-                            const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}&email=${encodeURIComponent(emailParam)}`;
-                            console.log('Redirecting to:', supabaseUrl);
-                            
-                            const startTime = Date.now();
-                            window.location.href = supabaseUrl;
-                            
-                            setTimeout(() => {
-                                if (Date.now() - startTime > 3000) {
-                                    clearTimeout(timeoutId);
-                                    console.log('Redirect seems to have failed');
-                                    setError('There was an error on our end. Please try again later or request a new password reset link.');
-                                    setStep('error');
-                                    setLoading(false);
-                                }
-                            }, 3000);
-                            
-                        } catch (err) {
-                            clearTimeout(timeoutId);
-                            console.error('Redirect error:', err);
-                            setError('There was an error on our end. Please try again later or request a new password reset link.');
-                            setStep('error');
-                            setLoading(false);
-                        }
-                        return;
-                    }
-
-                    if (token && type === 'recovery' && emailParam && verified === 'true') {
-                        console.log('Parameters verified by Supabase, proceeding to password reset form');
-                        setStep('reset');
-                        setLoading(false);
-                        return;
-                    }
-
-                    const androidAppLink = 'com.swapmystuff20://auth/login';
-                    const webAppLink = 'https://swapmystuff.com/login';
-                    if (userAgent.includes("Android") || userAgent.includes("iPhone")) {
-                        console.log('Mobile detected, redirecting to app');
-                        window.location.href = androidAppLink;
-                        setTimeout(() => {
-                            window.location.href = webAppLink;
-                        }, 1000);
-                        return;
-                    }
-
-                    if (accessToken && type === 'recovery' && supabase) {
-                        console.log('Setting session with access token');
-                        try {
-                            const { data, error } = await supabase.auth.setSession({
-                                access_token: accessToken,
-                                refresh_token: refreshToken || ''
-                            });
-                            if (error) throw error;
-                            console.log('Session set successfully:', data.user?.id);
-                            setStep('reset');
-                        } catch (err) {
-                            console.error('Session error:', err);
-                            setError('Failed to authenticate. Please try the reset link again.');
-                            setStep('error');
-                        }
-                        setLoading(false);
-                        return;
-                    }
-
-                    setError('Invalid password reset link. Please request a new password reset from the app.');
-                    setStep('error');
+                    const requestId = crypto.randomUUID();
+                    const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}&email=${encodeURIComponent(emailParam)}&requestId=${requestId}`;
+                    console.log('Redirecting to:', supabaseUrl, { requestId });
+                    localStorage.setItem(lastAttemptKey, Date.now().toString());
+                    window.location.href = supabaseUrl;
+                    return;
                 } catch (err) {
-                    console.error('Initialization error:', err);
-                    setError('There was an error on our end. Please try again later.');
+                    clearTimeout(timeoutId);
+                    console.error('Redirect error:', err);
+                    setError('There was an error on our end. Please try again later or request a new password reset link.');
                     setStep('error');
-                } finally {
                     setLoading(false);
                 }
-            };
-            
-            const getErrorMessage = (errorCode, customMessage) => {
-                if (customMessage) return customMessage;
-                switch(errorCode) {
-                    case 'expired':
-                    case 'token_expired':
-                        return 'The password reset link has expired. Please request a new one from the app.';
-                    case 'invalid':
-                    case 'invalid_link':
-                    case 'invalid_token':
-                        return 'The password reset link is invalid. Please request a new one from the app.';
-                    case 'server_error':
-                    case 'otp_failed':
-                    case 'verification_failed':
-                        return 'There was an error on our end. Please try again later or request a new password reset link.';
-                    case 'network_error':
-                    case 'timeout':
-                        return 'Network error occurred. Please check your connection and try again.';
-                    default:
-                        return 'There was an error on our end. Please try again later or request a new password reset link.';
-                }
-            };
-            
-            const validatePassword = () => {
-                const newRequirements = {
-                    length: password.length >= 8,
-                    upper: /[A-Z]/.test(password),
-                    lower: /[a-z]/.test(password),
-                    number: /\d/.test(password),
-                    match: password === confirmPassword && password.length > 0
-                };
-                setRequirements(newRequirements);
-                const metRequirements = Object.values(newRequirements).filter(Boolean).length;
-                const strength = Math.round((metRequirements / 5) * 100);
-                setPasswordStrength(strength);
-            };
-            
-            const getStrengthColor = () => {
-                if (passwordStrength < 40) return 'bg-red-500';
-                if (passwordStrength < 80) return 'bg-amber-500';
-                return 'bg-emerald-500';
-            };
-            
-            const getStrengthText = () => {
-                if (passwordStrength < 40) return 'Weak';
-                if (passwordStrength < 80) return 'Moderate';
-                return 'Strong';
-            };
-            
-            const handleSubmit = async (e) => {
-                e.preventDefault();
-                if (!Object.values(requirements).every(Boolean)) {
-                    setError('Please meet all password requirements.');
-                    return;
-                }
-                setIsSubmitting(true);
-                setError('');
-                try {
-                    if (supabase) {
-                        const { error } = await supabase.auth.updateUser({
-                            password: password
-                        });
-                        if (error) {
-                            if (error.message?.includes('Token has expired') || error.message?.includes('invalid')) {
-                                throw new Error('Your password reset session has expired. Please request a new password reset link.');
-                            } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
-                                throw new Error('Network error. Please check your connection and try again.');
-                            } else {
-                                throw new Error('There was an error on our end. Please try again later.');
-                            }
-                        }
-                        console.log('Password updated successfully');
-                        setStep('success');
-                    } else {
-                        throw new Error('Authentication service not available. Please try again later.');
-                    }
-                } catch (err) {
-                    console.error('Password update error:', err);
-                    setError(err.message || 'There was an error on our end. Please try again later.');
-                } finally {
-                    setIsSubmitting(false);
-                }
-            };
-            
-            const openApp = () => {
-                const deepLink = 'com.swapmystuff20://auth/login';
-                console.log('Opening app with deep link:', deepLink);
-                window.location.href = deepLink;
-            };
-            
-            const requestNewReset = () => {
-                openApp();
-            };
-            
-            const getBackgroundGradient = () => {
-                switch(step) {
-                    case 'success': return 'success-gradient';
-                    case 'error': return 'error-gradient';
-                    case 'reset': return 'reset-gradient';
-                    case 'redirecting': return 'gradient-bg';
-                    case 'emailPrompt': return 'gradient-bg';
-                    default: return 'gradient-bg';
-                }
-            };
+                return;
+            }
 
-            const getLoadingContent = () => {
-                if (step === 'redirecting') {
-                    return {
-                        title: '🔄 Verifying...',
-                        message: 'Please wait while we verify your reset link...'
-                    };
+            if (token && type === 'recovery' && emailParam && verified === 'true') {
+                console.log('Parameters verified by Supabase, proceeding to password reset form');
+                setStep('reset');
+                setLoading(false);
+                return;
+            }
+
+            const androidAppLink = 'com.swapmystuff20://auth/login';
+            const webAppLink = 'https://swapmystuff.com/login';
+            if (userAgent.includes("Android") || userAgent.includes("iPhone")) {
+                console.log('Mobile detected, redirecting to app');
+                window.location.href = androidAppLink;
+                setTimeout(() => {
+                    window.location.href = webAppLink;
+                }, 1000);
+                return;
+            }
+
+            if (accessToken && type === 'recovery' && supabase) {
+                console.log('Setting session with access token');
+                try {
+                    const { data, error } = await supabase.auth.setSession({
+                        access_token: accessToken,
+                        refresh_token: refreshToken || ''
+                    });
+                    if (error) throw error;
+                    console.log('Session set successfully:', data.user?.id);
+                    setStep('reset');
+                } catch (err) {
+                    console.error('Session error:', err);
+                    setError('Failed to authenticate. Please try the reset link again.');
+                    setStep('error');
                 }
-                return {
-                    title: '🔐 Processing...',
-                    message: 'Please wait while we process your request...'
-                };
+                setLoading(false);
+                return;
+            }
+
+            setError('Invalid password reset link. Email is required. Please request a new password reset from the app.');
+            setStep('error');
+        } catch (err) {
+            console.error('Initialization error:', err);
+            setError('There was an error on our end. Please try again later.');
+            setStep('error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const getErrorMessage = (errorCode, customMessage) => {
+        if (customMessage) return customMessage;
+        switch(errorCode) {
+            case 'expired':
+            case 'token_expired':
+                return 'The password reset link has expired. Please request a new one from the app.';
+            case 'invalid':
+            case 'invalid_link':
+            case 'invalid_token':
+                return 'The password reset link is invalid. Please request a new one from the app.';
+            case 'server_error':
+            case 'otp_failed':
+            case 'verification_failed':
+                return 'There was an error on our end. Please try again later or request a new password reset link.';
+            case 'network_error':
+            case 'timeout':
+                return 'Network error occurred. Please check your connection and try again.';
+            case 'duplicate_request':
+                return 'This reset link is already being processed. Please use the open tab or request a new link.';
+            default:
+                return 'There was an error on our end. Please try again later or request a new password reset link.';
+        }
+    };
+
+    const validatePassword = () => {
+        const newRequirements = {
+            length: password.length >= 8,
+            upper: /[A-Z]/.test(password),
+            lower: /[a-z]/.test(password),
+            number: /\d/.test(password),
+            match: password === confirmPassword && password.length > 0
+        };
+        setRequirements(newRequirements);
+        const metRequirements = Object.values(newRequirements).filter(Boolean).length;
+        const strength = Math.round((metRequirements / 5) * 100);
+        setPasswordStrength(strength);
+    };
+
+    const getStrengthColor = () => {
+        if (passwordStrength < 40) return 'bg-red-500';
+        if (passwordStrength < 80) return 'bg-amber-500';
+        return 'bg-emerald-500';
+    };
+
+    const getStrengthText = () => {
+        if (passwordStrength < 40) return 'Weak';
+        if (passwordStrength < 80) return 'Moderate';
+        return 'Strong';
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!Object.values(requirements).every(Boolean)) {
+            setError('Please meet all password requirements.');
+            return;
+        }
+        setIsSubmitting(true);
+        setError('');
+        try {
+            if (supabase) {
+                const { error } = await supabase.auth.updateUser({
+                    password: password
+                });
+                if (error) {
+                    if (error.message?.includes('Token has expired') || error.message?.includes('invalid')) {
+                        throw new Error('Your password reset session has expired. Please request a new password reset link.');
+                    } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
+                        throw new Error('Network error. Please check your connection and try again.');
+                    } else {
+                        throw new Error('There was an error on our end. Please try again later.');
+                    }
+                }
+                console.log('Password updated successfully');
+                setStep('success');
+            } else {
+                throw new Error('Authentication service not available. Please try again later.');
+            }
+        } catch (err) {
+            console.error('Password update error:', err);
+            setError(err.message || 'There was an error on our end. Please try again later.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const openApp = () => {
+        const deepLink = 'com.swapmystuff20://auth/login';
+        console.log('Opening app with deep link:', deepLink);
+        window.location.href = deepLink;
+    };
+
+    const requestNewReset = () => {
+        openApp();
+    };
+
+    const getBackgroundGradient = () => {
+        switch(step) {
+            case 'success': return 'success-gradient';
+            case 'error': return 'error-gradient';
+            case 'reset': return 'reset-gradient';
+            case 'redirecting': return 'gradient-bg';
+            default: return 'gradient-bg';
+        }
+    };
+
+    const getLoadingContent = () => {
+        if (step === 'redirecting') {
+            return {
+                title: '🔄 Verifying...',
+                message: 'Please wait while we verify your reset link. Do not refresh or open this link in another tab.'
             };
-            
-            if (loading || step === 'redirecting') {
-                const content = getLoadingContent();
-                return (
-                    <div className={`min-h-screen flex items-center justify-center p-4 ${getBackgroundGradient()}`}>
-                        <div className="text-center card rounded-2xl p-8">
-                            <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-                            <h1 className="text-white text-2xl font-semibold mb-3">{content.title}</h1>
-                            <p className="text-white text-base font-medium opacity-90">{content.message}</p>
-                            {step === 'redirecting' && (
-                                <p className="text-white text-sm mt-3 opacity-70">
-                                    If this takes too long, please try requesting a new reset link.
-                                </p>
-                            )}
-                        </div>
-                    </div>
-                );
-            }
-            
-            if (step === 'emailPrompt') {
-                return (
-                    <div className={`min-h-screen flex items-center justify-center p-6 ${getBackgroundGradient()}`}>
-                        <div className="max-w-lg w-full card rounded-2xl shadow-xl p-10">
-                            <div className="text-center">
-                                <div className="mx-auto h-16 w-16 rounded-full bg-blue-50 flex items-center justify-center mb-6 pulse">
-                                    <svg className="h-8 w-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l9-6 9 6v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
-                                    </svg>
-                                </div>
-                                <h1 className="text-3xl font-bold text-gray-900 mb-3">Enter Your Email</h1>
-                                <p className="text-gray-600 mb-8 text-base">
-                                    Please enter the email address associated with your SwapMyStuff account.
-                                </p>
-                                
-                                {error && (
-                                    <div className="bg-red-50 border border-red-100 rounded-lg p-4 mb-6 shake">
-                                        <p className="text-red-700 text-sm font-medium">{error}</p>
-                                    </div>
-                                )}
-                                
-                                <form onSubmit={handleEmailSubmit} className="space-y-6">
-                                    <div className="text-left">
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Email Address
-                                        </label>
-                                        <input
-                                            type="email"
-                                            value={email}
-                                            onChange={(e) => setEmail(e.target.value)}
-                                            className="w-full p-3.5 border border-gray-200 rounded-lg input-focus transition-all duration-300 bg-white/80 text-gray-900 placeholder-gray-400"
-                                            placeholder="Enter your email"
-                                            required
-                                        />
-                                    </div>
-                                    
-                                    <button
-                                        type="submit"
-                                        disabled={isSubmitting}
-                                        className="w-full btn-primary text-white px-6 py-3.5 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold text-base shadow-md"
-                                    >
-                                        {isSubmitting ? (
-                                            <>
-                                                <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
-                                                Verifying...
-                                            </>
-                                        ) : (
-                                            'Continue'
-                                        )}
-                                    </button>
-                                </form>
-                                
-                                <div className="border-t border-gray-100 pt-6 mt-8">
-                                    <p className="text-gray-600 text-sm mb-3">
-                                        Don't have the app yet?
-                                    </p>
-                                    <a 
-                                        href="https://play.google.com/store/apps/details?id=com.swapmystuff20" 
-                                        className="inline-flex items-center btn-secondary text-white px-6 py-3 rounded-lg font-medium text-sm shadow-md"
-                                    >
-                                        Get on Google Play
-                                    </a>
-                                </div>
+        }
+        return {
+            title: '🔐 Processing...',
+            message: 'Please wait while we process your request...'
+        };
+    };
+
+    if (loading || step === 'redirecting') {
+        const content = getLoadingContent();
+        return (
+            <div className={`min-h-screen flex items-center justify-center p-4 ${getBackgroundGradient()}`}>
+                <div className="text-center card rounded-2xl p-8">
+                    <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+                    <h1 className="text-white text-2xl font-semibold mb-3">{content.title}</h1>
+                    <p className="text-white text-base font-medium opacity-90">{content.message}</p>
+                    {step === 'redirecting' && (
+                        <p className="text-white text-sm mt-3 opacity-70">
+                            If this takes too long, please try requesting a new reset link.
+                        </p>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className={`min-h-screen flex items-center justify-center p-6 ${getBackgroundGradient()}`}>
+            <div className="max-w-lg w-full card rounded-2xl shadow-xl p-10">
+                <div className="text-center">
+                    {step === 'success' ? (
+                        <>
+                            <div className="mx-auto h-16 w-16 rounded-full bg-emerald-50 flex items-center justify-center mb-6 float-animation">
+                                <svg className="h-8 w-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                </svg>
                             </div>
-                        </div>
-                        
-                        <div className="fixed inset-0 pointer-events-none">
-                            <div className="absolute top-0 left-0 w-96 h-96 bg-blue-200 opacity-5 rounded-full blur-3xl animate-pulse"></div>
-                            <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-200 opacity-5 rounded-full blur-3xl animate-pulse"></div>
-                        </div>
-                    </div>
-                );
-            }
-            
-            return (
-                <div className={`min-h-screen flex items-center justify-center p-6 ${getBackgroundGradient()}`}>
-                    <div className="max-w-lg w-full card rounded-2xl shadow-xl p-10">
-                        <div className="text-center">
-                            {step === 'success' ? (
-                                <>
-                                    <div className="mx-auto h-16 w-16 rounded-full bg-emerald-50 flex items-center justify-center mb-6 float-animation">
-                                        <svg className="h-8 w-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                                        </svg>
-                                    </div>
-                                    <h1 className="text-3xl font-bold text-gray-900 mb-3">Success!</h1>
-                                    <p className="text-gray-600 mb-8 text-base">
-                                        Your password has been updated successfully!
-                                    </p>
-                                    <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-4 mb-8">
-                                        <p className="text-emerald-700 text-sm font-medium">
-                                            You can now sign in with your new password.
-                                        </p>
-                                    </div>
-                                    <button 
-                                        onClick={openApp}
-                                        className="w-full btn-primary text-white px-6 py-3.5 rounded-lg font-semibold text-base shadow-md"
-                                    >
-                                        Open SwapMyStuff App
-                                    </button>
-                                </>
-                            ) : step === 'error' ? (
-                                <>
-                                    <div className="mx-auto h-16 w-16 rounded-full bg-red-50 flex items-center justify-center mb-6">
-                                        <svg className="h-8 w-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.268 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                                        </svg>
-                                    </div>
-                                    <h1 className="text-3xl font-bold text-gray-900 mb-3">Oops!</h1>
-                                    <p className="text-gray-600 mb-8 text-base">
-                                        {error}
-                                    </p>
-                                    <div className="bg-amber-50 border border-amber-100 rounded-lg p-4 mb-8">
-                                        <p className="text-amber-700 text-sm font-medium">
-                                            You can request a new password reset from the SwapMyStuff app.
-                                        </p>
-                                    </div>
-                                    <div className="space-y-3">
-                                        <button 
-                                            onClick={requestNewReset}
-                                            className="w-full btn-primary text-white px-6 py-3.5 rounded-lg font-semibold text-base shadow-md"
-                                        >
-                                            Request New Reset Link
-                                        </button>
-                                        <button 
-                                            onClick={openApp}
-                                            className="w-full btn-secondary text-white px-6 py-3 rounded-lg font-medium text-base shadow-md"
-                                        >
-                                            Open SwapMyStuff App
-                                        </button>
-                                    </div>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="mx-auto h-16 w-16 rounded-full bg-blue-50 flex items-center justify-center mb-6 pulse">
-                                        <svg className="h-8 w-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-1a2 2 0 00-2-2H6a2 2 0 00-2 2v1a2 2 0 002 2zM12 9a3 3 0 100-6 3 3 0 000 6z" />
-                                        </svg>
-                                    </div>
-                                    <h1 className="text-3xl font-bold text-gray-900 mb-3">Reset Password</h1>
-                                    <p className="text-gray-600 mb-8 text-base">
-                                        Enter your new password below.
-                                    </p>
+                            <h1 className="text-3xl font-bold text-gray-900 mb-3">Success!</h1>
+                            <p className="text-gray-600 mb-8 text-base">
+                                Your password has been updated successfully!
+                            </p>
+                            <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-4 mb-8">
+                                <p className="text-emerald-700 text-sm font-medium">
+                                    You can now sign in with your new password.
+                                </p>
+                            </div>
+                            <button 
+                                onClick={openApp}
+                                className="w-full btn-primary text-white px-6 py-3.5 rounded-lg font-semibold text-base shadow-md"
+                            >
+                                Open SwapMyStuff App
+                            </button>
+                        </>
+                    ) : step === 'error' ? (
+                        <>
+                            <div className="mx-auto h-16 w-16 rounded-full bg-red-50 flex items-center justify-center mb-6">
+                                <svg className="h-8 w-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.268 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                                </svg>
+                            </div>
+                            <h1 className="text-3xl font-bold text-gray-900 mb-3">Oops!</h1>
+                            <p className="text-gray-600 mb-8 text-base">
+                                {error}
+                            </p>
+                            <div className="bg-amber-50 border border-amber-100 rounded-lg p-4 mb-8">
+                                <p className="text-amber-700 text-sm font-medium">
+                                    You can request a new password reset from the SwapMyStuff app.
+                                </p>
+                            </div>
+                            <div className="space-y-3">
+                                <button 
+                                    onClick={requestNewReset}
+                                    className="w-full btn-primary text-white px-6 py-3.5 rounded-lg font-semibold text-base shadow Genealogy
+                                </button>
+                                <button 
+                                    onClick={openApp}
+                                    className="w-full btn-secondary text-white px-6 py-3 rounded-lg font-medium text-base shadow-md"
+                                >
+                                    Open SwapMyStuff App
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="mx-auto h-16 w-16 rounded-full bg-blue-50 flex items-center justify-center mb-6 pulse">
+                                <svg className="h-8 w-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-1a2 2 0 00-2-2H6a2 2 0 00-2 2v1a2 2 0 002 2zM12 9a3 3 0 100-6 3 3 0 000 6z" />
+                                </svg>
+                            </div>
+                            <h1 className="text-3xl font-bold text-gray-900 mb-3">Reset Password</h1>
+                            <p className="text-gray-600 mb-8 text-base">
+                                Enter your new password below.
+                            </p>
+                            
+                            {error && (
+                                <div className="bg-red-50 border border-red-100 rounded-lg p-4 mb-6 shake">
+                                    <p className="text-red-700 text-sm font-medium">{error}</p>
+                                </div>
+                            )}
+                            
+                            <form onSubmit={handleSubmit} className="space-y-6">
+                                <div className="text-left">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        New Password
+                                    </label>
+                                    <input
+                                        type="password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        className="w-full p-3.5 border border-gray-200 rounded-lg input-focus transition-all duration-300 bg-white/80 text-gray-900 placeholder-gray-400"
+                                        placeholder="Enter new password"
+                                        required
+                                    />
                                     
-                                    {error && (
-                                        <div className="bg-red-50 border border-red-100 rounded-lg p-4 mb-6 shake">
-                                            <p className="text-red-700 text-sm font-medium">{error}</p>
+                                    {password && (
+                                        <div className="mt-3">
+                                            <div className="flex justify-between items-center mb-2">
+                                                <span className="text-sm text-gray-600 font-medium">Password Strength</span>
+                                                <span className={`text-sm font-semibold ${passwordStrength < 40 ? 'text-red-500' : passwordStrength < 80 ? 'text-amber-500' : 'text-emerald-500'}`}>
+                                                    {getStrengthText()}
+                                                </span>
+                                            </div>
+                                            <div className="w-full bg-gray-100 rounded-full h-2">
+                                                <div 
+                                                    className={`strength-bar ${getStrengthColor()}`}
+                                                    style={{ width: `${passwordStrength}%` }}
+                                                ></div>
+                                            </div>
                                         </div>
                                     )}
                                     
-                                    <form onSubmit={handleSubmit} className="space-y-6">
-                                        <div className="text-left">
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                New Password
-                                            </label>
-                                            <input
-                                                type="password"
-                                                value={password}
-                                                onChange={(e) => setPassword(e.target.value)}
-                                                className="w-full p-3.5 border border-gray-200 rounded-lg input-focus transition-all duration-300 bg-white/80 text-gray-900 placeholder-gray-400"
-                                                placeholder="Enter new password"
-                                                required
-                                            />
-                                            
-                                            {password && (
-                                                <div className="mt-3">
-                                                    <div className="flex justify-between items-center mb-2">
-                                                        <span className="text-sm text-gray-600 font-medium">Password Strength</span>
-                                                        <span className={`text-sm font-semibold ${passwordStrength < 40 ? 'text-red-500' : passwordStrength < 80 ? 'text-amber-500' : 'text-emerald-500'}`}>
-                                                            {getStrengthText()}
-                                                        </span>
-                                                    </div>
-                                                    <div className="w-full bg-gray-100 rounded-full h-2">
-                                                        <div 
-                                                            className={`strength-bar ${getStrengthColor()}`}
-                                                            style={{ width: `${passwordStrength}%` }}
-                                                        ></div>
-                                                    </div>
-                                                </div>
-                                            )}
-                                            
-                                            <div className="mt-4 space-y-2">
-                                                <div className={`text-sm flex items-center ${requirements.length ? 'text-emerald-600' : 'text-gray-500'}`}>
-                                                    <span className="mr-2 text-lg">{requirements.length ? '✓' : '○'}</span>
-                                                    At least 8 characters
-                                                </div>
-                                                <div className={`text-sm flex items-center ${requirements.upper ? 'text-emerald-600' : 'text-gray-500'}`}>
-                                                    <span className="mr-2 text-lg">{requirements.upper ? '✓' : '○'}</span>
-                                                    One uppercase letter
-                                                </div>
-                                                <div className={`text-sm flex items-center ${requirements.lower ? 'text-emerald-600' : 'text-gray-500'}`}>
-                                                    <span className="mr-2 text-lg">{requirements.lower ? '✓' : '○'}</span>
-                                                    One lowercase letter
-                                                </div>
-                                                <div className={`text-sm flex items-center ${requirements.number ? 'text-emerald-600' : 'text-gray-500'}`}>
-                                                    <span className="mr-2 text-lg">{requirements.number ? '✓' : '○'}</span>
-                                                    One number
-                                                </div>
-                                            </div>
+                                    <div className="mt-4 space-y-2">
+                                        <div className={`text-sm flex items-center ${requirements.length ? 'text-emerald-600' : 'text-gray-500'}`}>
+                                            <span className="mr-2 text-lg">{requirements.length ? '✓' : '○'}</span>
+                                            At least 8 characters
                                         </div>
-                                        
-                                        <div className="text-left">
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                Confirm Password
-                                            </label>
-                                            <input
-                                                type="password"
-                                                value={confirmPassword}
-                                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                                className="w-full p-3.5 border border-gray-200 rounded-lg input-focus transition-all duration-300 bg-white/80 text-gray-900 placeholder-gray-400"
-                                                placeholder="Confirm new password"
-                                                required
-                                            />
-                                            {confirmPassword && (
-                                                <div className="mt-2 text-sm flex items-center">
-                                                    <span className="mr-2 text-lg">{requirements.match ? '✓' : '○'}</span>
-                                                    <span className={requirements.match ? 'text-emerald-600' : 'text-gray-500'}>
-                                                        Passwords match
-                                                    </span>
-                                                </div>
-                                            )}
+                                        <div className={`text-sm flex items-center ${requirements.upper ? 'text-emerald-600' : 'text-gray-500'}`}>
+                                            <span className="mr-2 text-lg">{requirements.upper ? '✓' : '○'}</span>
+                                            One uppercase letter
                                         </div>
-                                        
-                                        <button
-                                            type="submit"
-                                            disabled={isSubmitting}
-                                            className="w-full btn-primary text-white px-6 py-3.5 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold text-base shadow-md"
-                                        >
-                                            {isSubmitting ? (
-                                                <>
-                                                    <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
-                                                    Resetting...
-                                                </>
-                                            ) : (
-                                                'Reset Password'
-                                            )}
-                                        </button>
-                                    </form>
-                                </>
-                            )}
-                        </div>
-                    </div>
+                                        <div className={`text-sm flex items-center ${requirements.lower ? 'text-emerald-600' : 'text-gray-500'}`}>
+                                            <span className="mr-2 text-lg">{requirements.lower ? '✓' : '○'}</span>
+                                            One lowercase letter
+                                        </div>
+                                        <div className={`text-sm flex items-center ${requirements.number ? 'text-emerald-600' : 'text-gray-500'}`}>
+                                            <span className="mr-2 text-lg">{requirements.number ? '✓' : '○'}</span>
+                                            One number
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div className="text-left">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Confirm Password
+                                    </label>
+                                    <input
+                                        type="password"
+                                        value={confirmPassword}
+                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                        className="w-full p-3.5 border border-gray-200 rounded-lg input-focus transition-all duration-300 bg-white/80 text-gray-900 placeholder-gray-400"
+                                        placeholder="Confirm new password"
+                                        required
+                                    />
+                                    {confirmPassword && (
+                                        <div className="mt-2 text-sm flex items-center">
+                                            <span className="mr-2 text-lg">{requirements.match ? '✓' : '○'}</span>
+                                            <span className={requirements.match ? 'text-emerald-600' : 'text-gray-500'}>
+                                                Passwords match
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                                
+                                <button
+                                    type="submit"
+                                    disabled={isSubmitting}
+                                    className="w-full btn-primary text-white px-6 py-3.5 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold text-base shadow-md"
+                                >
+                                    {isSubmitting ? (
+                                        <>
+                                            <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
+                                            Resetting...
+                                        </>
+                                    ) : (
+                                        'Reset Password'
+                                    )}
+                                </button>
+                            </form>
+                        </>
+                    )}
                 </div>
-            );
-        }
+            </div>
+        );
+    }
 
-        const root = createRoot(document.getElementById('root'));
-        root.render(<PasswordResetPage />);
-    </script>
-</body>
-</html>
+    const root = createRoot(document.getElementById('root'));
+    root.render(<PasswordResetPage />);
