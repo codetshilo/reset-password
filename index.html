@@ -152,114 +152,122 @@
             }, [password, confirmPassword]);
             
             const initializePage = async () => {
-                try {
-                    console.log('Initializing with params:', { 
-                        hasToken: !!token, 
-                        type, 
-                        email: emailParam,
-                        hasAccessToken: !!accessToken,
-                        hasRefreshToken: !!refreshToken,
-                        hasError: !!errorParam,
-                        verified
-                    });
+    try {
+        console.log('Initializing with params:', { 
+            hasToken: !!token, 
+            type, 
+            email: emailParam,
+            hasAccessToken: !!accessToken,
+            hasRefreshToken: !!refreshToken,
+            hasError: !!errorParam,
+            verified
+        });
+
+        // Early exit if error is present
+        if (errorParam) {
+            setError(getErrorMessage(errorParam, message));
+            setStep('error');
+            setLoading(false);
+            return;
+        }
+
+        // Handle verified case with access token
+        if (verified === 'true' && accessToken && type === 'recovery' && supabase) {
+            console.log('Verified parameter present with access token, checking session');
+            const { data: sessionData } = await supabase.auth.getSession();
+            if (!sessionData?.session?.access_token) {
+                setError('No valid session found. Please use the reset link again.');
+                setStep('error');
+                setLoading(false);
+                return;
+            }
+            console.log('Valid session found, setting session with provided tokens');
+            try {
+                const { data, error } = await supabase.auth.setSession({
+                    access_token: accessToken,
+                    refresh_token: refreshToken || ''
+                });
+                if (error) throw error;
+                console.log('Session set successfully:', data.user?.id);
+                setStep('reset');
+                setLoading(false);
+                return;
+            } catch (err) {
+                console.error('Session error:', err);
+                setError('Failed to authenticate. Please try the reset link again or request a new one.');
+                setStep('error');
+                setLoading(false);
+                return;
+            }
+        }
+
+        // Handle initial token verification
+        if (token && type === 'recovery' && emailParam && !redirectedFromFunction) {
+            // Generate a unique key for the OTP request
+            const otpRequestKey = `otp_request_${token}_${emailParam}`;
             
-                    // Early exit if error is present
-                    if (errorParam) {
-                        setError(getErrorMessage(errorParam, message));
-                        setStep('error');
-                        setLoading(false);
-                        return;
-                    }
+            // Check if this OTP request has already been processed
+            if (localStorage.getItem(otpRequestKey)) {
+                console.log('Duplicate OTP request detected for:', otpRequestKey);
+                setError('This password reset link has already been used or is being processed. Please request a new one if needed.');
+                setStep('error');
+                setLoading(false);
+                return;
+            }
+
+            console.log('Redirecting to Supabase function for token verification');
+            setStep('redirecting');
             
-                    // Handle verified case with access token
-                    if (verified === 'true' && accessToken && type === 'recovery' && supabase) {
-                        console.log('Verified parameter present with access token, setting session');
-                        try {
-                            const { data, error } = await supabase.auth.setSession({
-                                access_token: accessToken,
-                                refresh_token: refreshToken || ''
-                            });
-                            if (error) throw error;
-                            console.log('Session set successfully:', data.user?.id);
-                            setStep('reset');
-                            setLoading(false);
-                            return;
-                        } catch (err) {
-                            console.error('Session error:', err);
-                            setError('Failed to authenticate. Please try the reset link again or request a new one.');
-                            setStep('error');
-                            setLoading(false);
-                            return;
-                        }
-                    }
+            const timeoutId = setTimeout(() => {
+                console.log('Redirect timeout - assuming server error');
+                setError('The verification process took too long. Please check your connection or request a new password reset link.');
+                setStep('error');
+                setLoading(false);
+            }, 10000);
             
-                    // Handle initial token verification
-                    if (token && type === 'recovery' && emailParam && !redirectedFromFunction) {
-                        // Generate a unique key for the OTP request
-                        const otpRequestKey = `otp_request_${token}_${emailParam}`;
-                        
-                        // Check if this OTP request has already been processed
-                        if (localStorage.getItem(otpRequestKey)) {
-                            console.log('Duplicate OTP request detected for:', otpRequestKey);
-                            setError('This password reset link has already been used or is being processed. Please request a new one if needed.');
-                            setStep('error');
-                            setLoading(false);
-                            return;
-                        }
-            
-                        console.log('Redirecting to Supabase function for token verification');
-                        setStep('redirecting');
-                        
-                        const timeoutId = setTimeout(() => {
-                            console.log('Redirect timeout - assuming server error');
-                            setError('The verification process took too long. Please check your connection or request a new password reset link.');
-                            setStep('error');
-                            setLoading(false);
-                        }, 10000);
-                        
-                        try {
-                            // Mark this OTP request as processed
-                            localStorage.setItem(otpRequestKey, 'processed');
-                            
-                            // Construct Supabase function URL
-                            const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}&email=${encodeURIComponent(emailParam)}`;
-                            console.log('Redirecting to:', supabaseUrl);
-                            
-                            window.location.href = supabaseUrl;
-                            return;
-                        } catch (err) {
-                            clearTimeout(timeoutId);
-                            console.error('Redirect error:', err);
-                            setError('There was an error processing your request. Please try again or request a new password reset link.');
-                            setStep('error');
-                            setLoading(false);
-                            return;
-                        }
-                    }
-            
-                    // Handle mobile redirect
-                    const androidAppLink = 'com.swapmystuff20://auth/login';
-                    const webAppLink = 'https://swapmystuff.com/login';
-                    if (userAgent.includes("Android") || userAgent.includes("iPhone")) {
-                        console.log('Mobile detected, redirecting to app');
-                        window.location.href = androidAppLink;
-                        setTimeout(() => {
-                            window.location.href = webAppLink;
-                        }, 1000);
-                        return;
-                    }
-            
-                    // Default error case
-                    setError('Invalid or expired password reset link. Please request a new password reset from the app.');
-                    setStep('error');
-                    setLoading(false);
-                } catch (err) {
-                    console.error('Initialization error:', err);
-                    setError('There was an error on our end. Please try again later or request a new password reset link.');
-                    setStep('error');
-                    setLoading(false);
-                }
-            };
+            try {
+                // Mark this OTP request as processed
+                localStorage.setItem(otpRequestKey, 'processed');
+                
+                // Construct Supabase function URL
+                const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}&email=${encodeURIComponent(emailParam)}`;
+                console.log('Redirecting to:', supabaseUrl);
+                
+                window.location.href = supabaseUrl;
+                return;
+            } catch (err) {
+                clearTimeout(timeoutId);
+                console.error('Redirect error:', err);
+                setError('There was an error processing your request. Please try again or request a new password reset link.');
+                setStep('error');
+                setLoading(false);
+                return;
+            }
+        }
+
+        // Handle mobile redirect
+        const androidAppLink = 'com.swapmystuff20://auth/login';
+        const webAppLink = 'https://swapmystuff.com/login';
+        if (userAgent.includes("Android") || userAgent.includes("iPhone")) {
+            console.log('Mobile detected, redirecting to app');
+            window.location.href = androidAppLink;
+            setTimeout(() => {
+                window.location.href = webAppLink;
+            }, 1000);
+            return;
+        }
+
+        // Default error case
+        setError('Invalid or expired password reset link. Please request a new password reset from the app.');
+        setStep('error');
+        setLoading(false);
+    } catch (err) {
+        console.error('Initialization error:', err);
+        setError('There was an error on our end. Please try again later or request a new password reset link.');
+        setStep('error');
+        setLoading(false);
+    }
+};
             const getErrorMessage = (errorCode, customMessage) => {
                 if (customMessage) return customMessage;
                 switch(errorCode) {
