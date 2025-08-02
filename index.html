@@ -120,6 +120,7 @@
                 match: false
             });
             
+            // Initialize Supabase client
             let supabase = null;
             try {
                 if (window.supabase) {
@@ -131,16 +132,36 @@
                 console.warn('Supabase not available:', e);
             }
             
-            const urlParams = new URLSearchParams(window.location.search);
-            const token = urlParams.get('token');
-            const type = urlParams.get('type');
-            const emailParam = urlParams.get('email');
-            const errorParam = urlParams.get('error');
-            const message = urlParams.get('message');
-            const accessToken = urlParams.get('access_token');
-            const refreshToken = urlParams.get('refresh_token');
-            const verified = urlParams.get('verified');
-            const redirectedFromFunction = accessToken || refreshToken;
+            // Enhanced parameter parsing function
+            const parseUrlParameters = () => {
+                const urlParams = new URLSearchParams(window.location.search);
+                const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        
+                const getParam = (key) => urlParams.get(key) || hashParams.get(key);
+                
+                return {
+                    token: getParam('token'),
+                    type: getParam('type'),
+                    email: getParam('email'),
+                    error: getParam('error'),
+                    message: getParam('message'),
+                    accessToken: getParam('access_token'),
+                    refreshToken: getParam('refresh_token'),
+                    verified: getParam('verified')
+                };
+            };
+
+            // Parse parameters once
+            const params = parseUrlParameters();
+            const token = params.token;
+            const type = params.type;
+            const emailParam = params.email;
+            const errorParam = params.error;
+            const message = params.message;
+            const accessToken = params.accessToken;
+            const refreshToken = params.refreshToken;
+            const verified = params.verified;
+            const redirectedFromFunction = !!(accessToken || refreshToken);
             const userAgent = navigator.userAgent || "";
             
             React.useEffect(() => {
@@ -151,129 +172,228 @@
                 validatePassword();
             }, [password, confirmPassword]);
             
+            // FIXED: Main initialization function with proper logic flow
             const initializePage = async () => {
-            try {
-                console.log('Initializing with params:', { 
-                    hasToken: !!token, 
-                    type, 
-                    email: emailParam,
-                    hasAccessToken: !!accessToken,
-                    hasRefreshToken: !!refreshToken,
-                    hasError: !!errorParam,
-                    verified
-                });
-        
-                // ✅ Early exit if error is present
-                if (errorParam) {
-                    setError(getErrorMessage(errorParam, message));
-                    setStep('error');
-                    setLoading(false);
-                    return;
-                }
-        
-                // ✅ Handle verified=true without session logic
-                if (verified === 'true') {
-                    console.log('Verified parameter present, proceeding to password reset form');
-                    setStep('reset');
-                    setLoading(false);
-                    return;
-                }
-        
-                // ✅ Handle initial token verification via Supabase function
-                if (token && type === 'recovery' && emailParam && !redirectedFromFunction) {
-                    const otpRequestKey = `otp_request_${token}_${emailParam}`;
-        
-                    if (localStorage.getItem(otpRequestKey)) {
-                        console.log('Duplicate OTP request detected for:', otpRequestKey);
-                        setError('This password reset link has already been used or is being processed. Please request a new one if needed.');
+                try {
+                    console.log('Initializing with params:', { 
+                        hasToken: !!token, 
+                        type, 
+                        email: emailParam,
+                        hasAccessToken: !!accessToken,
+                        hasRefreshToken: !!refreshToken,
+                        hasError: !!errorParam,
+                        verified,
+                        redirectedFromFunction
+                    });
+
+                    // ✅ PRIORITY 1: Handle errors first
+                    if (errorParam) {
+                        setError(getErrorMessage(errorParam, message));
                         setStep('error');
                         setLoading(false);
                         return;
                     }
-        
-                    console.log('Redirecting to Supabase function for token verification');
-                    setStep('redirecting');
-        
-                    const timeoutId = setTimeout(() => {
-                        console.log('Redirect timeout - assuming server error');
-                        setError('The verification process took too long. Please check your connection or request a new password reset link.');
-                        setStep('error');
-                        setLoading(false);
-                    }, 10000);
-        
-                    try {
-                        localStorage.setItem(otpRequestKey, 'processed');
-                        const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}&email=${encodeURIComponent(emailParam)}`;
-                        console.log('Redirecting to:', supabaseUrl);
-                        window.location.href = supabaseUrl;
-                        return;
-                    } catch (err) {
-                        clearTimeout(timeoutId);
-                        console.error('Redirect error:', err);
-                        setError('There was an error processing your request. Please try again or request a new password reset link.');
-                        setStep('error');
-                        setLoading(false);
-                        return;
-                    }
-                }
-        
-                // ✅ Handle mobile redirect
-                const androidAppLink = 'com.swapmystuff20://auth/login';
-                const webAppLink = 'https://swapmystuff.com/login';
-                if (userAgent.includes("Android") || userAgent.includes("iPhone")) {
-                    console.log('Mobile detected, redirecting to app');
-                    window.location.href = androidAppLink;
-                    setTimeout(() => {
-                        window.location.href = webAppLink;
-                    }, 1000);
-                    return;
-                }
-        
-                // ✅ Handle session logic last
-                if (accessToken && type === 'recovery' && supabase) {
-                    console.log('Access token present, attempting to set session');
-                    try {
-                        const { data, error } = await supabase.auth.setSession({
-                            access_token: accessToken,
-                            refresh_token: refreshToken || ''
-                        });
-                        if (error) throw error;
-                        console.log('Session set successfully:', data.user?.id);
-        
-                        const { data: sessionData } = await supabase.auth.getSession();
-                        if (!sessionData?.session?.access_token) {
-                            console.error('No valid session found after setting session');
-                            setError('No valid session found. Please use the reset link again.');
+
+                    // ✅ PRIORITY 2: Handle verified=true with access tokens (OTP flow success)
+                    if (verified === 'true' && accessToken && type === 'recovery') {
+                        console.log('OTP flow: verified=true with access tokens, setting session');
+                        try {
+                            if (!supabase) {
+                                throw new Error('Supabase client not available');
+                            }
+
+                            const { data, error } = await supabase.auth.setSession({
+                                access_token: accessToken,
+                                refresh_token: refreshToken || ''
+                            });
+
+                            if (error) {
+                                console.error('Session setting failed:', error);
+                                throw error;
+                            }
+
+                            console.log('Session set successfully for OTP flow:', data.user?.id);
+                            
+                            // Verify session is working
+                            const { data: sessionData } = await supabase.auth.getSession();
+                            if (!sessionData?.session?.access_token) {
+                                throw new Error('Session verification failed');
+                            }
+
+                            setEmail(emailParam || data.user?.email || '');
+                            setStep('reset');
+                            setLoading(false);
+                            return;
+                        } catch (err) {
+                            console.error('OTP session error:', err);
+                            setError('Failed to authenticate with your reset link. Please request a new password reset.');
                             setStep('error');
                             setLoading(false);
                             return;
                         }
-        
-                        console.log('Valid session confirmed after setting');
-                        setStep('reset');
-                        setLoading(false);
-                        return;
-                    } catch (err) {
-                        console.error('Session error:', err);
-                        setError('Failed to authenticate. Please try the reset link again or request a new one.');
-                        setStep('error');
+                    }
+
+                    // ✅ PRIORITY 3: Handle verified=true without access tokens (JWT flow success)
+                    if (verified === 'true' && token && type === 'recovery' && !accessToken) {
+                        console.log('JWT flow: verified=true with token, attempting JWT session');
+                        try {
+                            if (!supabase) {
+                                throw new Error('Supabase client not available');
+                            }
+
+                            // For JWT tokens, we need to get user and set session
+                            const { data: userData, error: userError } = await supabase.auth.getUser(token);
+                            
+                            if (userError || !userData?.user) {
+                                console.error('JWT user verification failed:', userError);
+                                throw new Error('Invalid or expired token');
+                            }
+
+                            // Try to create a session with the JWT token
+                            const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+                                access_token: token,
+                                refresh_token: ''
+                            });
+
+                            if (sessionError) {
+                                console.error('JWT session creation failed:', sessionError);
+                                throw new Error('Token has expired or is invalid');
+                            }
+
+                            console.log('JWT session set successfully:', sessionData.user?.id);
+                            setEmail(emailParam || userData.user.email || '');
+                            setStep('reset');
+                            setLoading(false);
+                            return;
+                        } catch (err) {
+                            console.error('JWT session error:', err);
+                            setError('Your reset link has expired or is invalid. Please request a new password reset.');
+                            setStep('error');
+                            setLoading(false);
+                            return;
+                        }
+                    }
+
+                    // ✅ PRIORITY 4: Handle initial verification redirect (fresh links from email)
+                    if (token && type === 'recovery' && emailParam && !redirectedFromFunction && verified !== 'true') {
+                        // Check for duplicate processing
+                        const otpRequestKey = `otp_request_${token}_${emailParam}`;
+                        
+                        if (localStorage.getItem(otpRequestKey)) {
+                            console.log('Duplicate request detected for:', otpRequestKey);
+                            setError('This password reset link has already been used. Please request a new one if needed.');
+                            setStep('error');
+                            setLoading(false);
+                            return;
+                        }
+
+                        console.log('Fresh link detected, redirecting to Supabase function for verification');
+                        setStep('redirecting');
+
+                        // Set timeout for redirect
+                        const timeoutId = setTimeout(() => {
+                            console.log('Redirect timeout - server may be slow');
+                            setError('The verification process is taking longer than expected. Please try again or request a new reset link.');
+                            setStep('error');
+                            setLoading(false);
+                        }, 15000);
+
+                        try {
+                            // Mark as processing to prevent duplicates
+                            localStorage.setItem(otpRequestKey, Date.now().toString());
+                            
+                            const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${encodeURIComponent(token)}&type=${encodeURIComponent(type)}&email=${encodeURIComponent(emailParam)}`;
+                            
+                            console.log('Redirecting to:', supabaseUrl);
+                            window.location.href = supabaseUrl;
+                            return;
+                        } catch (err) {
+                            clearTimeout(timeoutId);
+                            console.error('Redirect error:', err);
+                            setError('Failed to process your reset link. Please try again or request a new one.');
+                            setStep('error');
+                            setLoading(false);
+                            return;
+                        }
+                    }
+
+                    // ✅ PRIORITY 5: Handle mobile app redirects
+                    const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+                    if (isMobile && !token && !accessToken && !errorParam) {
+                        console.log('Mobile device detected without reset parameters, redirecting to app');
+                        const androidAppLink = 'com.swapmystuff20://auth/login';
+                        const iosAppLink = 'swapmystuff://auth/login';
+                        const webAppFallback = 'https://swapmystuff.com/login';
+                        
+                        try {
+                            // Try mobile app first
+                            if (userAgent.includes("Android")) {
+                                window.location.href = androidAppLink;
+                            } else if (userAgent.includes("iPhone") || userAgent.includes("iPad")) {
+                                window.location.href = iosAppLink;
+                            }
+                            
+                            // Fallback to web after delay
+                            setTimeout(() => {
+                                window.location.href = webAppFallback;
+                            }, 1500);
+                            return;
+                        } catch (err) {
+                            console.error('Mobile redirect error:', err);
+                            window.location.href = webAppFallback;
+                            return;
+                        }
+                    }
+
+                    // ✅ PRIORITY 6: Handle incomplete parameters (missing email for token)
+                    if (token && type === 'recovery' && !emailParam && !verified) {
+                        console.log('Token provided but email missing, prompting for email');
+                        setStep('emailPrompt');
                         setLoading(false);
                         return;
                     }
+
+                    // ✅ PRIORITY 7: Default case - invalid access
+                    console.log('No valid parameters found, showing error');
+                    setError('Invalid or expired password reset link. Please request a new password reset from the SwapMyStuff app.');
+                    setStep('error');
+                    setLoading(false);
+
+                } catch (err) {
+                    console.error('Initialization error:', err);
+                    setError('An unexpected error occurred. Please try again or request a new password reset link.');
+                    setStep('error');
+                    setLoading(false);
                 }
-        
-                // ✅ Default error case
-                console.log('Reached default error case: invalid or expired link');
-                setError('Invalid or expired password reset link. Please request a new password reset from the app.');
-                setStep('error');
-                setLoading(false);
-            } catch (err) {
-                console.error('Initialization error:', err);
-                setError('There was an error on our end. Please try again later or request a new password reset link.');
-                setStep('error');
-                setLoading(false);
-            }
-        };
+            };
+
+            // Email submission handler for emailPrompt step
+            const handleEmailSubmit = async (e) => {
+                e.preventDefault();
+                if (!email || !token) {
+                    setError('Missing required information. Please request a new password reset link.');
+                    return;
+                }
+
+                setIsSubmitting(true);
+                setError('');
+
+                try {
+                    console.log('Submitting email with token for verification');
+                    
+                    // Redirect to Supabase function with email
+                    const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${encodeURIComponent(token)}&type=recovery&email=${encodeURIComponent(email)}`;
+                    
+                    console.log('Redirecting to verification with email:', supabaseUrl);
+                    window.location.href = supabaseUrl;
+                    
+                } catch (err) {
+                    console.error('Email submission error:', err);
+                    setError('Failed to process your request. Please try again.');
+                    setIsSubmitting(false);
+                }
+            };
+
             const getErrorMessage = (errorCode, customMessage) => {
                 if (customMessage) return customMessage;
                 switch(errorCode) {
@@ -634,7 +754,7 @@
                                         
                                         <button
                                             type="submit"
-                                            disabled={isSubmitting}
+                                            disabled={isSubmitting || !Object.values(requirements).every(Boolean)}
                                             className="w-full btn-primary text-white px-6 py-3.5 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold text-base shadow-md"
                                         >
                                             {isSubmitting ? (
@@ -660,5 +780,3 @@
     </script>
 </body>
 </html>
-
-
