@@ -103,36 +103,6 @@
     <script type="text/babel">
         const { createRoot } = ReactDOM;
 
-        // Error Boundary Component
-        class ErrorBoundary extends React.Component {
-            state = { hasError: false, errorMessage: '' };
-
-            static getDerivedStateFromError(error) {
-                return { hasError: true, errorMessage: error.message || 'Something went wrong.' };
-            }
-
-            render() {
-                if (this.state.hasError) {
-                    return (
-                        <div className="min-h-screen flex items-center justify-center p-4 error-gradient">
-                            <div className="text-center card rounded-2xl p-8">
-                                <h1 className="text-2xl font-semibold text-gray-900 mb-3">Oops! Something went wrong.</h1>
-                                <p className="text-gray-600 mb-4">{this.state.errorMessage}</p>
-                                <p className="text-gray-600 mb-8">Please try again later or request a new password reset link.</p>
-                                <button
-                                    onClick={() => window.location.reload()}
-                                    className="btn-primary text-white px-6 py-3 rounded-lg font-semibold"
-                                >
-                                    Reload Page
-                                </button>
-                            </div>
-                        </div>
-                    );
-                }
-                return this.props.children;
-            }
-        }
-
         function PasswordResetPage() {
             const [loading, setLoading] = React.useState(true);
             const [step, setStep] = React.useState('loading');
@@ -149,145 +119,160 @@
                 number: false,
                 match: false
             });
-            const [accessToken, setAccessToken] = React.useState('');
-            const [refreshToken, setRefreshToken] = React.useState('');
-
+            
             let supabase = null;
             try {
                 if (window.supabase) {
-                    const requestId = Math.random().toString(36).substring(7);
-                    console.log(`[${new Date().toISOString()}] [${requestId}] Initializing Supabase client`);
                     const supabaseUrl = 'https://vmdsqcwgrivjaxikiabr.supabase.co';
                     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtZHNxY3dncml2amF4aWtpYWJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ3MDU1NjcsImV4cCI6MjA1MDI4MTU2N30.6oSx_XpqwNB0FzRnNVfhW91U8FO7QGBL0r9Q5zxKqDg';
                     supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
-                } else {
-                    console.warn(`[${new Date().toISOString()}] [${requestId}] Supabase script not loaded`);
                 }
             } catch (e) {
-                console.warn(`[${new Date().toISOString()}] [${requestId}] Supabase not available:`, e);
+                console.warn('Supabase not available:', e);
             }
-
+            
             const urlParams = new URLSearchParams(window.location.search);
             const token = urlParams.get('token');
             const type = urlParams.get('type');
             const emailParam = urlParams.get('email');
             const errorParam = urlParams.get('error');
             const message = urlParams.get('message');
+            const accessToken = urlParams.get('access_token');
+            const refreshToken = urlParams.get('refresh_token');
             const verified = urlParams.get('verified');
-            const redirectedFromFunction = urlParams.get('access_token') || urlParams.get('refresh_token');
+            const redirectedFromFunction = accessToken || refreshToken;
+            const accessToken = urlParams.get('access_token');
+            const refreshToken = urlParams.get('refresh_token');
             const userAgent = navigator.userAgent || "";
-
+            
             React.useEffect(() => {
                 initializePage();
             }, []);
-
+            
             React.useEffect(() => {
                 validatePassword();
             }, [password, confirmPassword]);
-
+            
             const initializePage = async () => {
-                const requestId = Math.random().toString(36).substring(7);
                 try {
-                    console.log(`[${new Date().toISOString()}] [${requestId}] Initializing with params:`, { 
+                    console.log('Initializing with params:', { 
                         hasToken: !!token, 
                         type, 
-                        email: emailParam ? emailParam.substring(0, 3) + "***@" + emailParam.split('@')[1] : 'none',
-                        hasAccessToken: !!urlParams.get('access_token'),
+                        email: emailParam,
+                        hasAccessToken: !!accessToken,
                         hasError: !!errorParam,
                         verified
                     });
-
-                    // Store access and refresh tokens in state
-                    setAccessToken(urlParams.get('access_token') || '');
-                    setRefreshToken(urlParams.get('refresh_token') || '');
-                    setEmail(emailParam || '');
-
-                    // Early exit if verified is true
+            
+                    // ✅ Early exit if verified is true
                     if (verified === 'true') {
-                        console.log(`[${new Date().toISOString()}] [${requestId}] Verified parameter present, proceeding to password reset form`);
+                        console.log('Verified parameter present, proceeding to password reset form');
                         setStep('reset');
                         setLoading(false);
                         return;
                     }
-
+            
                     if (errorParam) {
-                        console.log(`[${new Date().toISOString()}] [${requestId}] Error parameter found: ${errorParam}`);
                         setError(getErrorMessage(errorParam, message));
                         setStep('error');
                         setLoading(false);
                         return;
                     }
-
+            
                     if (token && type === 'recovery' && emailParam && !redirectedFromFunction) {
+                        // Generate a unique key for the OTP request
                         const otpRequestKey = `otp_request_${token}_${emailParam}`;
+                        
+                        // Check if this OTP request has already been processed
                         if (localStorage.getItem(otpRequestKey)) {
-                            console.log(`[${new Date().toISOString()}] [${requestId}] Duplicate OTP request detected for: ${otpRequestKey}`);
+                            console.log('Duplicate OTP request detected for:', otpRequestKey);
                             setError('This password reset link has already been used or is being processed. Please request a new one if needed.');
                             setStep('error');
                             setLoading(false);
                             return;
                         }
-
-                        console.log(`[${new Date().toISOString()}] [${requestId}] Redirecting to Supabase function for token verification`);
+            
+                        console.log('Redirecting to Supabase function for token verification');
                         setStep('redirecting');
-
+                        
                         const timeoutId = setTimeout(() => {
-                            console.log(`[${new Date().toISOString()}] [${requestId}] Redirect timeout - assuming server error`);
+                            console.log('Redirect timeout - assuming server error');
                             setError('The verification process took too long. Please check your connection or request a new password reset link.');
                             setStep('error');
                             setLoading(false);
                         }, 10000);
-
+                        
                         try {
+                            // Mark this OTP request as processed
                             localStorage.setItem(otpRequestKey, 'processed');
+                            
+                            // Ensure HTTPS for Supabase function URL
                             const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}&email=${encodeURIComponent(emailParam)}`;
-                            console.log(`[${new Date().toISOString()}] [${requestId}] Redirecting to: ${supabaseUrl}`);
+                            console.log('Redirecting to:', supabaseUrl);
                             
                             const startTime = Date.now();
                             window.location.href = supabaseUrl;
-
+                            
                             setTimeout(() => {
                                 if (Date.now() - startTime > 3000) {
                                     clearTimeout(timeoutId);
-                                    console.log(`[${new Date().toISOString()}] [${requestId}] Redirect seems to have failed`);
+                                    console.log('Redirect seems to have failed');
                                     setError('Failed to verify the reset link. Please request a new password reset link.');
                                     setStep('error');
                                     setLoading(false);
                                 }
                             }, 3000);
+                            
                         } catch (err) {
                             clearTimeout(timeoutId);
-                            console.error(`[${new Date().toISOString()}] [${requestId}] Redirect error:`, err);
+                            console.error('Redirect error:', err);
                             setError('There was an error processing your request. Please try again or request a new password reset link.');
                             setStep('error');
                             setLoading(false);
                         }
                         return;
                     }
-
+            
                     const androidAppLink = 'com.swapmystuff20://auth/login';
                     const webAppLink = 'https://swapmystuff.com/login';
                     if (userAgent.includes("Android") || userAgent.includes("iPhone")) {
-                        console.log(`[${new Date().toISOString()}] [${requestId}] Mobile detected, redirecting to app`);
+                        console.log('Mobile detected, redirecting to app');
                         window.location.href = androidAppLink;
                         setTimeout(() => {
                             window.location.href = webAppLink;
                         }, 1000);
                         return;
                     }
-
-                    console.log(`[${new Date().toISOString()}] [${requestId}] Invalid or expired password reset link`);
+            
+                    if (accessToken && type === 'recovery' && supabase) {
+                        console.log('Setting session with access token');
+                        try {
+                            const { data, error } = await supabase.auth.setSession({
+                                access_token: accessToken,
+                                refresh_token: refreshToken || ''
+                            });
+                            if (error) throw error;
+                            console.log('Session set successfully:', data.user?.id);
+                            setStep('reset');
+                        } catch (err) {
+                            console.error('Session error:', err);
+                            setError('Failed to authenticate. Please try the reset link again or request a new one.');
+                            setStep('error');
+                        }
+                        setLoading(false);
+                        return;
+                    }
+            
                     setError('Invalid or expired password reset link. Please request a new password reset from the app.');
                     setStep('error');
-                    setLoading(false);
                 } catch (err) {
-                    console.error(`[${new Date().toISOString()}] [${requestId}] Initialization error:`, err);
+                    console.error('Initialization error:', err);
                     setError('There was an error on our end. Please try again later or request a new password reset link.');
                     setStep('error');
+                } finally {
                     setLoading(false);
                 }
             };
-
             const getErrorMessage = (errorCode, customMessage) => {
                 if (customMessage) return customMessage;
                 switch(errorCode) {
@@ -309,7 +294,7 @@
                         return 'There was an error on our end. Please try again later or request a new password reset link.';
                 }
             };
-
+            
             const validatePassword = () => {
                 const newRequirements = {
                     length: password.length >= 8,
@@ -323,19 +308,19 @@
                 const strength = Math.round((metRequirements / 5) * 100);
                 setPasswordStrength(strength);
             };
-
+            
             const getStrengthColor = () => {
                 if (passwordStrength < 40) return 'bg-red-500';
                 if (passwordStrength < 80) return 'bg-amber-500';
                 return 'bg-emerald-500';
             };
-
+            
             const getStrengthText = () => {
                 if (passwordStrength < 40) return 'Weak';
                 if (passwordStrength < 80) return 'Moderate';
                 return 'Strong';
             };
-
+            
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 if (!Object.values(requirements).every(Boolean)) {
@@ -344,62 +329,43 @@
                 }
                 setIsSubmitting(true);
                 setError('');
-                const requestId = Math.random().toString(36).substring(7);
-                console.log(`[${new Date().toISOString()}] [${requestId}] Attempting password update for email: ${email ? email.substring(0, 3) + "***@" + email.split('@')[1] : 'unknown'}`);
                 try {
-                    if (!supabase) {
+                    if (supabase) {
+                        const { error } = await supabase.auth.updateUser({
+                            password: password
+                        });
+                        if (error) {
+                            if (error.message?.includes('Token has expired') || error.message?.includes('invalid')) {
+                                throw new Error('Your password reset session has expired. Please request a new password reset link.');
+                            } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
+                                throw new Error('Network error. Please check your connection and try again.');
+                            } else {
+                                throw new Error('There was an error on our end. Please try again later.');
+                            }
+                        }
+                        console.log('Password updated successfully');
+                        setStep('success');
+                    } else {
                         throw new Error('Authentication service not available. Please try again later.');
                     }
-                    // Set session with access_token and refresh_token
-                    if (accessToken) {
-                        console.log(`[${new Date().toISOString()}] [${requestId}] Setting session with access token`);
-                        const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-                            access_token: accessToken,
-                            refresh_token: refreshToken || ''
-                        });
-                        if (sessionError) {
-                            console.error(`[${new Date().toISOString()}] [${requestId}] Session error:`, sessionError);
-                            throw new Error('Failed to authenticate session. Please try the reset link again or request a new one.');
-                        }
-                        console.log(`[${new Date().toISOString()}] [${requestId}] Session set successfully:`, sessionData.user?.id);
-                    } else {
-                        console.log(`[${new Date().toISOString()}] [${requestId}] No access token available`);
-                        throw new Error('Authentication token missing. Please try the reset link again or request a new one.');
-                    }
-                    // Update password
-                    const { error } = await supabase.auth.updateUser({
-                        password: password
-                    });
-                    if (error) {
-                        console.error(`[${new Date().toISOString()}] [${requestId}] Password update error:`, error);
-                        if (error.message?.includes('Token has expired') || error.message?.includes('invalid')) {
-                            throw new Error('Your password reset session has expired. Please request a new password reset link.');
-                        } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
-                            throw new Error('Network error. Please check your connection and try again.');
-                        } else {
-                            throw new Error('There was an error updating your password. Please try again later.');
-                        }
-                    }
-                    console.log(`[${new Date().toISOString()}] [${requestId}] Password updated successfully`);
-                    setStep('success');
                 } catch (err) {
-                    console.error(`[${new Date().toISOString()}] [${requestId}] Password update error:`, err);
+                    console.error('Password update error:', err);
                     setError(err.message || 'There was an error on our end. Please try again later.');
                 } finally {
                     setIsSubmitting(false);
                 }
             };
-
+            
             const openApp = () => {
                 const deepLink = 'com.swapmystuff20://auth/login';
                 console.log('Opening app with deep link:', deepLink);
                 window.location.href = deepLink;
             };
-
+            
             const requestNewReset = () => {
                 openApp();
             };
-
+            
             const getBackgroundGradient = () => {
                 switch(step) {
                     case 'success': return 'success-gradient';
@@ -423,7 +389,7 @@
                     message: 'Please wait while we process your request...'
                 };
             };
-
+            
             if (loading || step === 'redirecting') {
                 const content = getLoadingContent();
                 return (
@@ -441,8 +407,81 @@
                     </div>
                 );
             }
-
-            // Note: emailPrompt step is not implemented in original code, so omitting it
+            
+            if (step === 'emailPrompt') {
+                return (
+                    <div className={`min-h-screen flex items-center justify-center p-6 ${getBackgroundGradient()}`}>
+                        <div className="max-w-lg w-full card rounded-2xl shadow-xl p-10">
+                            <div className="text-center">
+                                <div className="mx-auto h-16 w-16 rounded-full bg-blue-50 flex items-center justify-center mb-6 pulse">
+                                    <svg className="h-8 w-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l9-6 9 6v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+                                    </svg>
+                                </div>
+                                <h1 className="text-3xl font-bold text-gray-900 mb-3">Enter Your Email</h1>
+                                <p className="text-gray-600 mb-8 text-base">
+                                    Please enter the email address associated with your SwapMyStuff account.
+                                </p>
+                                
+                                {error && (
+                                    <div className="bg-red-50 border border-red-100 rounded-lg p-4 mb-6 shake">
+                                        <p className="text-red-700 text-sm font-medium">{error}</p>
+                                    </div>
+                                )}
+                                
+                                <form onSubmit={handleEmailSubmit} className="space-y-6">
+                                    <div className="text-left">
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Email Address
+                                        </label>
+                                        <input
+                                            type="email"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            className="w-full p-3.5 border border-gray-200 rounded-lg input-focus transition-all duration-300 bg-white/80 text-gray-900 placeholder-gray-400"
+                                            placeholder="Enter your email"
+                                            required
+                                        />
+                                    </div>
+                                    
+                                    <button
+                                        type="submit"
+                                        disabled={isSubmitting}
+                                        className="w-full btn-primary text-white px-6 py-3.5 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold text-base shadow-md"
+                                    >
+                                        {isSubmitting ? (
+                                            <>
+                                                <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
+                                                Verifying...
+                                            </>
+                                        ) : (
+                                            'Continue'
+                                        )}
+                                    </button>
+                                </form>
+                                
+                                <div className="border-t border-gray-100 pt-6 mt-8">
+                                    <p className="text-gray-600 text-sm mb-3">
+                                        Don't have the app yet?
+                                    </p>
+                                    <a 
+                                        href="https://play.google.com/store/apps/details?id=com.swapmystuff20" 
+                                        className="inline-flex items-center btn-secondary text-white px-6 py-3 rounded-lg font-medium text-sm shadow-md"
+                                    >
+                                        Get on Google Play
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="fixed inset-0 pointer-events-none">
+                            <div className="absolute top-0 left-0 w-96 h-96 bg-blue-200 opacity-5 rounded-full blur-3xl animate-pulse"></div>
+                            <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-200 opacity-5 rounded-full blur-3xl animate-pulse"></div>
+                        </div>
+                    </div>
+                );
+            }
+            
             return (
                 <div className={`min-h-screen flex items-center justify-center p-6 ${getBackgroundGradient()}`}>
                     <div className="max-w-lg w-full card rounded-2xl shadow-xl p-10">
@@ -616,11 +655,7 @@
         }
 
         const root = createRoot(document.getElementById('root'));
-        root.render(
-            <ErrorBoundary>
-                <PasswordResetPage />
-            </ErrorBoundary>
-        );
+        root.render(<PasswordResetPage />);
     </script>
 </body>
 </html>
