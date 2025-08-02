@@ -175,7 +175,7 @@
             // Check if this OTP request has already been processed
             if (localStorage.getItem(otpRequestKey)) {
                 console.log('Duplicate OTP request detected for:', otpRequestKey);
-                setError('This password reset link has already been processed. Please request a new one if needed.');
+                setError('This password reset link has already been used or is being processed. Please request a new one if needed.');
                 setStep('error');
                 setLoading(false);
                 return;
@@ -186,7 +186,7 @@
             
             const timeoutId = setTimeout(() => {
                 console.log('Redirect timeout - assuming server error');
-                setError('There was an error on our end. Please try again later or request a new password reset link.');
+                setError('The verification process took too long. Please check your connection or request a new password reset link.');
                 setStep('error');
                 setLoading(false);
             }, 10000);
@@ -195,6 +195,7 @@
                 // Mark this OTP request as processed
                 localStorage.setItem(otpRequestKey, 'processed');
                 
+                // Ensure HTTPS for Supabase function URL
                 const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}&email=${encodeURIComponent(emailParam)}`;
                 console.log('Redirecting to:', supabaseUrl);
                 
@@ -205,7 +206,7 @@
                     if (Date.now() - startTime > 3000) {
                         clearTimeout(timeoutId);
                         console.log('Redirect seems to have failed');
-                        setError('There was an error on our end. Please try again later or request a new password reset link.');
+                        setError('Failed to verify the reset link. Please request a new password reset link.');
                         setStep('error');
                         setLoading(false);
                     }
@@ -214,7 +215,7 @@
             } catch (err) {
                 clearTimeout(timeoutId);
                 console.error('Redirect error:', err);
-                setError('There was an error on our end. Please try again later or request a new password reset link.');
+                setError('There was an error processing your request. Please try again or request a new password reset link.');
                 setStep('error');
                 setLoading(false);
             }
@@ -223,6 +224,9 @@
 
         if (token && type === 'recovery' && emailParam && verified === 'true') {
             console.log('Parameters verified by Supabase, proceeding to password reset form');
+            // Optionally clear the localStorage entry after successful verification
+            const otpRequestKey = `otp_request_${token}_${emailParam}`;
+            localStorage.removeItem(otpRequestKey);
             setStep('reset');
             setLoading(false);
             return;
@@ -251,24 +255,23 @@
                 setStep('reset');
             } catch (err) {
                 console.error('Session error:', err);
-                setError('Failed to authenticate. Please try the reset link again.');
+                setError('Failed to authenticate. Please try the reset link again or request a new one.');
                 setStep('error');
             }
             setLoading(false);
             return;
         }
 
-        setError('Invalid password reset link. Please request a new password reset from the app.');
+        setError('Invalid or expired password reset link. Please request a new password reset from the app.');
         setStep('error');
     } catch (err) {
         console.error('Initialization error:', err);
-        setError('There was an error on our end. Please try again later.');
+        setError('There was an error on our end. Please try again later or request a new password reset link.');
         setStep('error');
     } finally {
         setLoading(false);
     }
 };
-            
             const getErrorMessage = (errorCode, customMessage) => {
                 if (customMessage) return customMessage;
                 switch(errorCode) {
