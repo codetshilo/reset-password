@@ -158,25 +158,26 @@
                         type, 
                         email: emailParam,
                         hasAccessToken: !!accessToken,
-                        hasError: !!errorParam 
+                        hasError: !!errorParam,
+                        verified
                     });
-
+            
+                    // ✅ Early exit if verified is true
+                    if (verified === 'true') {
+                        console.log('Verified parameter present, proceeding to password reset form');
+                        setStep('reset');
+                        setLoading(false);
+                        return;
+                    }
+            
                     if (errorParam) {
                         setError(getErrorMessage(errorParam, message));
                         setStep('error');
                         setLoading(false);
                         return;
                     }
-
+            
                     if (token && type === 'recovery' && emailParam && !redirectedFromFunction) {
-                        // Skip deduplication check if verified=true
-                        if (verified === 'true') {
-                            console.log('Verified parameter present, proceeding to password reset form');
-                            setStep('reset');
-                            setLoading(false);
-                            return;
-                        }
-
                         // Generate a unique key for the OTP request
                         const otpRequestKey = `otp_request_${token}_${emailParam}`;
                         
@@ -188,7 +189,7 @@
                             setLoading(false);
                             return;
                         }
-
+            
                         console.log('Redirecting to Supabase function for token verification');
                         setStep('redirecting');
                         
@@ -229,14 +230,7 @@
                         }
                         return;
                     }
-
-                    if (token && type === 'recovery' && emailParam && verified === 'true') {
-                        console.log('Parameters verified by Supabase, proceeding to password reset form');
-                        setStep('reset');
-                        setLoading(false);
-                        return;
-                    }
-
+            
                     const androidAppLink = 'com.swapmystuff20://auth/login';
                     const webAppLink = 'https://swapmystuff.com/login';
                     if (userAgent.includes("Android") || userAgent.includes("iPhone")) {
@@ -247,7 +241,7 @@
                         }, 1000);
                         return;
                     }
-
+            
                     if (accessToken && type === 'recovery' && supabase) {
                         console.log('Setting session with access token');
                         try {
@@ -266,7 +260,7 @@
                         setLoading(false);
                         return;
                     }
-
+            
                     setError('Invalid or expired password reset link. Please request a new password reset from the app.');
                     setStep('error');
                 } catch (err) {
