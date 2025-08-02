@@ -7,11 +7,12 @@
     <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.20.15/babel.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/supabase-js/2.45.0/umd/supabase.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/supabase-js/2.45.0/umd/supabase.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
+        /* Custom animations */
         @keyframes float {
             0%, 100% { transform: translateY(0px); }
             50% { transform: translateY(-8px); }
@@ -32,6 +33,7 @@
         .pulse { animation: pulse 2s ease-in-out infinite; }
         .shake { animation: shake 0.4s ease-in-out; }
 
+        /* Gradient backgrounds */
         .gradient-bg {
             background: linear-gradient(145deg, #6b7280 0%, #4b5563 100%);
         }
@@ -48,6 +50,7 @@
             background: linear-gradient(145deg, #3b82f6 0%, #60a5fa 100%);
         }
 
+        /* Enhanced input focus effect */
         .input-focus:focus {
             outline: none;
             ring: 2px;
@@ -56,12 +59,14 @@
             box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
         }
 
+        /* Strength bar */
         .strength-bar {
             height: 6px;
             border-radius: 3px;
             transition: width 0.4s ease, background-color 0.4s ease;
         }
 
+        /* Global styles */
         body {
             font-family: 'Inter', sans-serif;
             background: #f3f4f6;
@@ -103,6 +108,7 @@
             const [step, setStep] = React.useState('loading');
             const [password, setPassword] = React.useState('');
             const [confirmPassword, setConfirmPassword] = React.useState('');
+            const [email, setEmail] = React.useState('');
             const [isSubmitting, setIsSubmitting] = React.useState(false);
             const [error, setError] = React.useState('');
             const [passwordStrength, setPasswordStrength] = React.useState(0);
@@ -113,7 +119,7 @@
                 number: false,
                 match: false
             });
-
+            
             let supabase = null;
             try {
                 if (window.supabase) {
@@ -124,7 +130,7 @@
             } catch (e) {
                 console.warn('Supabase not available:', e);
             }
-
+            
             const urlParams = new URLSearchParams(window.location.search);
             const token = urlParams.get('token');
             const type = urlParams.get('type');
@@ -136,35 +142,16 @@
             const verified = urlParams.get('verified');
             const redirectedFromFunction = accessToken || refreshToken;
             const userAgent = navigator.userAgent || "";
-
+            
             React.useEffect(() => {
                 initializePage();
             }, []);
-
+            
             React.useEffect(() => {
                 validatePassword();
             }, [password, confirmPassword]);
-
+            
             const initializePage = async () => {
-                if (window.redirected) {
-                    console.log('Duplicate page initialization prevented');
-                    setError('This reset link is already being processed. Please use the open tab or request a new link.');
-                    setStep('error');
-                    setLoading(false);
-                    return;
-                }
-                window.redirected = true;
-
-                const lastAttemptKey = `lastRedirect_${token || 'default'}`;
-                const lastAttempt = localStorage.getItem(lastAttemptKey);
-                if (lastAttempt && Date.now() - parseInt(lastAttempt) < 30000) {
-                    console.log('Rate-limited redirect attempt for token:', token ? token.substring(0, 4) + '****' : 'none');
-                    setError('Please wait 30 seconds before retrying this link.');
-                    setStep('error');
-                    setLoading(false);
-                    return;
-                }
-
                 try {
                     console.log('Initializing with params:', { 
                         hasToken: !!token, 
@@ -184,19 +171,31 @@
                     if (token && type === 'recovery' && emailParam && !redirectedFromFunction) {
                         console.log('Redirecting to Supabase function for token verification');
                         setStep('redirecting');
+                        
                         const timeoutId = setTimeout(() => {
                             console.log('Redirect timeout - assuming server error');
                             setError('There was an error on our end. Please try again later or request a new password reset link.');
                             setStep('error');
                             setLoading(false);
                         }, 10000);
+                        
                         try {
-                            const requestId = crypto.randomUUID();
-                            const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}&email=${encodeURIComponent(emailParam)}&requestId=${requestId}`;
-                            console.log('Redirecting to:', supabaseUrl, { requestId });
-                            localStorage.setItem(lastAttemptKey, Date.now().toString());
+                            const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}&email=${encodeURIComponent(emailParam)}`;
+                            console.log('Redirecting to:', supabaseUrl);
+                            
+                            const startTime = Date.now();
                             window.location.href = supabaseUrl;
-                            return;
+                            
+                            setTimeout(() => {
+                                if (Date.now() - startTime > 3000) {
+                                    clearTimeout(timeoutId);
+                                    console.log('Redirect seems to have failed');
+                                    setError('There was an error on our end. Please try again later or request a new password reset link.');
+                                    setStep('error');
+                                    setLoading(false);
+                                }
+                            }, 3000);
+                            
                         } catch (err) {
                             clearTimeout(timeoutId);
                             console.error('Redirect error:', err);
@@ -244,7 +243,7 @@
                         return;
                     }
 
-                    setError('Invalid password reset link. Email is required. Please request a new password reset from the app.');
+                    setError('Invalid password reset link. Please request a new password reset from the app.');
                     setStep('error');
                 } catch (err) {
                     console.error('Initialization error:', err);
@@ -254,7 +253,7 @@
                     setLoading(false);
                 }
             };
-
+            
             const getErrorMessage = (errorCode, customMessage) => {
                 if (customMessage) return customMessage;
                 switch(errorCode) {
@@ -272,13 +271,11 @@
                     case 'network_error':
                     case 'timeout':
                         return 'Network error occurred. Please check your connection and try again.';
-                    case 'duplicate_request':
-                        return 'This reset link is already being processed. Please use the open tab or request a new link.';
                     default:
                         return 'There was an error on our end. Please try again later or request a new password reset link.';
                 }
             };
-
+            
             const validatePassword = () => {
                 const newRequirements = {
                     length: password.length >= 8,
@@ -292,19 +289,19 @@
                 const strength = Math.round((metRequirements / 5) * 100);
                 setPasswordStrength(strength);
             };
-
+            
             const getStrengthColor = () => {
                 if (passwordStrength < 40) return 'bg-red-500';
                 if (passwordStrength < 80) return 'bg-amber-500';
                 return 'bg-emerald-500';
             };
-
+            
             const getStrengthText = () => {
                 if (passwordStrength < 40) return 'Weak';
                 if (passwordStrength < 80) return 'Moderate';
                 return 'Strong';
             };
-
+            
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 if (!Object.values(requirements).every(Boolean)) {
@@ -339,23 +336,24 @@
                     setIsSubmitting(false);
                 }
             };
-
+            
             const openApp = () => {
                 const deepLink = 'com.swapmystuff20://auth/login';
                 console.log('Opening app with deep link:', deepLink);
                 window.location.href = deepLink;
             };
-
+            
             const requestNewReset = () => {
                 openApp();
             };
-
+            
             const getBackgroundGradient = () => {
                 switch(step) {
                     case 'success': return 'success-gradient';
                     case 'error': return 'error-gradient';
                     case 'reset': return 'reset-gradient';
                     case 'redirecting': return 'gradient-bg';
+                    case 'emailPrompt': return 'gradient-bg';
                     default: return 'gradient-bg';
                 }
             };
@@ -364,7 +362,7 @@
                 if (step === 'redirecting') {
                     return {
                         title: '🔄 Verifying...',
-                        message: 'Please wait while we verify your reset link. Do not refresh or open this link in another tab.'
+                        message: 'Please wait while we verify your reset link...'
                     };
                 }
                 return {
@@ -372,7 +370,7 @@
                     message: 'Please wait while we process your request...'
                 };
             };
-
+            
             if (loading || step === 'redirecting') {
                 const content = getLoadingContent();
                 return (
@@ -390,7 +388,81 @@
                     </div>
                 );
             }
-
+            
+            if (step === 'emailPrompt') {
+                return (
+                    <div className={`min-h-screen flex items-center justify-center p-6 ${getBackgroundGradient()}`}>
+                        <div className="max-w-lg w-full card rounded-2xl shadow-xl p-10">
+                            <div className="text-center">
+                                <div className="mx-auto h-16 w-16 rounded-full bg-blue-50 flex items-center justify-center mb-6 pulse">
+                                    <svg className="h-8 w-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l9-6 9 6v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+                                    </svg>
+                                </div>
+                                <h1 className="text-3xl font-bold text-gray-900 mb-3">Enter Your Email</h1>
+                                <p className="text-gray-600 mb-8 text-base">
+                                    Please enter the email address associated with your SwapMyStuff account.
+                                </p>
+                                
+                                {error && (
+                                    <div className="bg-red-50 border border-red-100 rounded-lg p-4 mb-6 shake">
+                                        <p className="text-red-700 text-sm font-medium">{error}</p>
+                                    </div>
+                                )}
+                                
+                                <form onSubmit={handleEmailSubmit} className="space-y-6">
+                                    <div className="text-left">
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Email Address
+                                        </label>
+                                        <input
+                                            type="email"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            className="w-full p-3.5 border border-gray-200 rounded-lg input-focus transition-all duration-300 bg-white/80 text-gray-900 placeholder-gray-400"
+                                            placeholder="Enter your email"
+                                            required
+                                        />
+                                    </div>
+                                    
+                                    <button
+                                        type="submit"
+                                        disabled={isSubmitting}
+                                        className="w-full btn-primary text-white px-6 py-3.5 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold text-base shadow-md"
+                                    >
+                                        {isSubmitting ? (
+                                            <>
+                                                <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
+                                                Verifying...
+                                            </>
+                                        ) : (
+                                            'Continue'
+                                        )}
+                                    </button>
+                                </form>
+                                
+                                <div className="border-t border-gray-100 pt-6 mt-8">
+                                    <p className="text-gray-600 text-sm mb-3">
+                                        Don't have the app yet?
+                                    </p>
+                                    <a 
+                                        href="https://play.google.com/store/apps/details?id=com.swapmystuff20" 
+                                        className="inline-flex items-center btn-secondary text-white px-6 py-3 rounded-lg font-medium text-sm shadow-md"
+                                    >
+                                        Get on Google Play
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="fixed inset-0 pointer-events-none">
+                            <div className="absolute top-0 left-0 w-96 h-96 bg-blue-200 opacity-5 rounded-full blur-3xl animate-pulse"></div>
+                            <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-200 opacity-5 rounded-full blur-3xl animate-pulse"></div>
+                        </div>
+                    </div>
+                );
+            }
+            
             return (
                 <div className={`min-h-screen flex items-center justify-center p-6 ${getBackgroundGradient()}`}>
                     <div className="max-w-lg w-full card rounded-2xl shadow-xl p-10">
