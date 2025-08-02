@@ -122,21 +122,14 @@
             
             let supabase = null;
             try {
-                if (window.supabase && typeof window.supabase.createClient === 'function') {
+                if (window.supabase) {
                     const supabaseUrl = 'https://vmdsqcwgrivjaxikiabr.supabase.co';
                     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtZHNxY3dncml2amF4aWtpYWJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ3MDU1NjcsImV4cCI6MjA1MDI4MTU2N30.6oSx_XpqwNB0FzRnNVfhW91U8FO7QGBL0r9Q5zxKqDg';
                     supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
-                    console.log('Supabase client initialized');
-                } else {
-                    throw new Error('Supabase library not loaded');
                 }
             } catch (e) {
-                console.error('Supabase initialization failed:', e);
-                setError('Authentication service not available. Please try again later.');
-                setStep('error');
-                setLoading(false);
+                console.warn('Supabase not available:', e);
             }
-
             
             const urlParams = new URLSearchParams(window.location.search);
             const token = urlParams.get('token');
@@ -667,4 +660,5 @@
     </script>
 </body>
 </html>
+
 
