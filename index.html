@@ -174,215 +174,174 @@
             
             // FIXED: Main initialization function with proper logic flow
             const initializePage = async () => {
-            try {
-                console.log('Initializing with params:', { 
-                    hasToken: !!token, 
-                    type, 
-                    email: emailParam,
-                    hasAccessToken: !!accessToken,
-                    hasRefreshToken: !!refreshToken,
-                    hasError: !!errorParam,
-                    verified
-                });
-        
-                // Handle errors first
-                if (errorParam) {
-                    setError(getErrorMessage(errorParam, message));
-                    setStep('error');
-                    setLoading(false);
-                    return;
-                }
-        
-                // CLEAN SEPARATION: Check which verified flow this is
-                if (verified === 'true') {
-                    if (accessToken) {
-                        // OTP FLOW: verified=true + access_token + refresh_token
-                        return await handleOtpFlow();
-                    } else if (token) {
-                        // JWT FLOW: verified=true + token
-                        return await handleJwtFlow();
-                    } else {
-                        // Invalid verified state
-                        setError('Invalid authentication state. Please request a new password reset.');
-                        setStep('error');
-                        setLoading(false);
-                        return;
-                    }
-                }
-        
-                // Handle fresh email links (not verified yet)
-                if (token && type === 'recovery' && emailParam && verified !== 'true') {
-                    return await handleFreshLink();
-                }
-        
-                // Handle mobile redirects
-                const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
-                if (isMobile && !token && !accessToken && !errorParam) {
-                    return handleMobileRedirect();
-                }
-        
-                // Handle incomplete parameters
-                if (token && type === 'recovery' && !emailParam && !verified) {
-                    setStep('emailPrompt');
-                    setLoading(false);
-                    return;
-                }
-        
-                // Default case - invalid
-                setError('Invalid or expired password reset link. Please request a new password reset from the SwapMyStuff app.');
-                setStep('error');
-                setLoading(false);
-        
-            } catch (err) {
-                console.error('Initialization error:', err);
-                setError('An unexpected error occurred. Please try again or request a new password reset link.');
-                setStep('error');
-                setLoading(false);
-            }
-        };
-        
-        // SEPARATE HANDLER: OTP Flow (verified=true + access_token)
-        const handleOtpFlow = async () => {
-            console.log('OTP flow: Setting session with access tokens');
-            try {
-                if (!supabase) {
-                    throw new Error('Supabase client not available');
-                }
-        
-                const { data, error } = await supabase.auth.setSession({
-                    access_token: accessToken,
-                    refresh_token: refreshToken || ''
-                });
-        
-                if (error) {
-                    console.error('OTP session setting failed:', error);
-                    throw error;
-                }
-        
-                console.log('OTP session set successfully:', data.user?.id);
-                
-                // Verify session is working
-                const { data: sessionData } = await supabase.auth.getSession();
-                if (!sessionData?.session?.access_token) {
-                    throw new Error('Session verification failed');
-                }
-        
-                setEmail(emailParam || data.user?.email || '');
-                setStep('reset');
-                setLoading(false);
-                
-            } catch (err) {
-                console.error('OTP flow error:', err);
-                setError('Failed to authenticate with your reset link. Please request a new password reset.');
-                setStep('error');
-                setLoading(false);
-            }
-        };
-        
-        // SEPARATE HANDLER: JWT Flow (verified=true + token)
-        const handleJwtFlow = async () => {
-            console.log('JWT flow: Creating session from JWT token');
-            try {
-                if (!supabase) {
-                    throw new Error('Supabase client not available');
-                }
-        
-                // Verify JWT token
-                const { data: userData, error: userError } = await supabase.auth.getUser(token);
-                
-                if (userError || !userData?.user) {
-                    console.error('JWT user verification failed:', userError);
-                    throw new Error('Invalid or expired token');
-                }
-        
-                // Create session from JWT
-                const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-                    access_token: token,
-                    refresh_token: ''
-                });
-        
-                if (sessionError) {
-                    console.error('JWT session creation failed:', sessionError);
-                    throw new Error('Token has expired or is invalid');
-                }
-        
-                console.log('JWT session set successfully:', sessionData.user?.id);
-                setEmail(emailParam || userData.user.email || '');
-                setStep('reset');
-                setLoading(false);
-                
-            } catch (err) {
-                console.error('JWT flow error:', err);
-                setError('Your reset link has expired or is invalid. Please request a new password reset.');
-                setStep('error');
-                setLoading(false);
-            }
-        };
-        
-        // SEPARATE HANDLER: Fresh Links (redirect to edge function)
-        const handleFreshLink = async () => {
-            // Check for duplicate processing
+    try {
+        console.log('Initializing with params:', { 
+            hasToken: !!token, 
+            type, 
+            email: emailParam,
+            hasAccessToken: !!accessToken,
+            hasRefreshToken: !!refreshToken,
+            hasError: !!errorParam,
+            verified
+        });
+
+        // ✅ Early exit if verified is true - just show the form
+        if (verified === 'true') {
+            console.log('Verified parameter present, proceeding to password reset form');
+            setEmail(emailParam || '');
+            setStep('reset');
+            setLoading(false);
+            return;
+        }
+
+        if (errorParam) {
+            setError(getErrorMessage(errorParam, message));
+            setStep('error');
+            setLoading(false);
+            return;
+        }
+
+        if (token && type === 'recovery' && emailParam && !redirectedFromFunction) {
             const otpRequestKey = `otp_request_${token}_${emailParam}`;
             
             if (localStorage.getItem(otpRequestKey)) {
-                console.log('Duplicate request detected');
-                setError('This password reset link has already been used. Please request a new one if needed.');
+                console.log('Duplicate OTP request detected for:', otpRequestKey);
+                setError('This password reset link has already been used or is being processed. Please request a new one if needed.');
                 setStep('error');
                 setLoading(false);
                 return;
             }
-        
-            console.log('Fresh link detected, redirecting to edge function');
+
+            console.log('Redirecting to Supabase function for token verification');
             setStep('redirecting');
-        
-            // Set timeout
+            
             const timeoutId = setTimeout(() => {
-                setError('The verification process is taking longer than expected. Please try again or request a new reset link.');
+                console.log('Redirect timeout - assuming server error');
+                setError('The verification process took too long. Please check your connection or request a new password reset link.');
                 setStep('error');
                 setLoading(false);
-            }, 15000);
-        
+            }, 10000);
+            
             try {
-                // Mark as processing
-                localStorage.setItem(otpRequestKey, Date.now().toString());
+                localStorage.setItem(otpRequestKey, 'processed');
                 
-                const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${encodeURIComponent(token)}&type=${encodeURIComponent(type)}&email=${encodeURIComponent(emailParam)}`;
+                const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}&email=${encodeURIComponent(emailParam)}`;
+                console.log('Redirecting to:', supabaseUrl);
                 
-                console.log('Redirecting to edge function:', supabaseUrl);
                 window.location.href = supabaseUrl;
                 
             } catch (err) {
                 clearTimeout(timeoutId);
                 console.error('Redirect error:', err);
-                setError('Failed to process your reset link. Please try again or request a new one.');
+                setError('There was an error processing your request. Please try again or request a new password reset link.');
                 setStep('error');
                 setLoading(false);
             }
-        };
-        
-        // SEPARATE HANDLER: Mobile Redirects
-        const handleMobileRedirect = () => {
-            console.log('Mobile device detected, redirecting to app');
-            const androidAppLink = 'com.swapmystuff20://auth/login';
-            const iosAppLink = 'swapmystuff://auth/login';
-            const webAppFallback = 'https://swapmystuff.com/login';
+            return;
+        }
+
+        // Mobile redirects
+        const androidAppLink = 'com.swapmystuff20://auth/login';
+        const webAppLink = 'https://swapmystuff.com/login';
+        if (userAgent.includes("Android") || userAgent.includes("iPhone")) {
+            console.log('Mobile detected, redirecting to app');
+            window.location.href = androidAppLink;
+            setTimeout(() => {
+                window.location.href = webAppLink;
+            }, 1000);
+            return;
+        }
+
+        // Default case
+        setError('Invalid or expired password reset link. Please request a new password reset from the app.');
+        setStep('error');
+        setLoading(false);
+
+    } catch (err) {
+        console.error('Initialization error:', err);
+        setError('There was an error on our end. Please try again later or request a new password reset link.');
+        setStep('error');
+        setLoading(false);
+    }
+};
+
+// Modified handleSubmit to authenticate before password update
+const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!Object.values(requirements).every(Boolean)) {
+        setError('Please meet all password requirements.');
+        return;
+    }
+    setIsSubmitting(true);
+    setError('');
+    
+    try {
+        if (!supabase) {
+            throw new Error('Authentication service not available. Please try again later.');
+        }
+
+        // AUTHENTICATE FIRST: Set session using tokens from URL
+        if (accessToken) {
+            console.log('Setting session for password update using access token');
+            const { data, error } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken || ''
+            });
             
-            try {
-                if (userAgent.includes("Android")) {
-                    window.location.href = androidAppLink;
-                } else if (userAgent.includes("iPhone") || userAgent.includes("iPad")) {
-                    window.location.href = iosAppLink;
+            if (error) {
+                console.error('Session authentication failed:', error);
+                if (error.message?.includes('Token has expired') || error.message?.includes('invalid')) {
+                    throw new Error('Your password reset session has expired. Please request a new password reset link.');
+                } else {
+                    throw new Error('Authentication failed. Please request a new password reset link.');
                 }
-                
-                setTimeout(() => {
-                    window.location.href = webAppFallback;
-                }, 1500);
-                
-            } catch (err) {
-                console.error('Mobile redirect error:', err);
-                window.location.href = webAppFallback;
             }
-        };
+            
+            console.log('Session authenticated successfully for password update');
+        } else if (token) {
+            console.log('Setting session for password update using JWT token');
+            const { data, error } = await supabase.auth.setSession({
+                access_token: token,
+                refresh_token: ''
+            });
+            
+            if (error) {
+                console.error('JWT session authentication failed:', error);
+                throw new Error('Your reset link has expired or is invalid. Please request a new password reset.');
+            }
+            
+            console.log('JWT session authenticated successfully for password update');
+        } else {
+            throw new Error('No authentication tokens available. Please request a new password reset link.');
+        }
+
+        // NOW UPDATE PASSWORD: User is authenticated
+        console.log('Updating password...');
+        const { error: updateError } = await supabase.auth.updateUser({
+            password: password
+        });
+        
+        if (updateError) {
+            console.error('Password update failed:', updateError);
+            if (updateError.message?.includes('Token has expired') || updateError.message?.includes('invalid')) {
+                throw new Error('Your password reset session has expired. Please request a new password reset link.');
+            } else if (updateError.message?.includes('network') || updateError.message?.includes('fetch')) {
+                throw new Error('Network error. Please check your connection and try again.');
+            } else {
+                throw new Error('Failed to update password. Please try again or request a new reset link.');
+            }
+        }
+        
+        console.log('Password updated successfully');
+        setStep('success');
+        
+    } catch (err) {
+        console.error('Password update error:', err);
+        setError(err.message || 'There was an error updating your password. Please try again later.');
+    } finally {
+        setIsSubmitting(false);
+    }
+};
             const getErrorMessage = (errorCode, customMessage) => {
                 if (customMessage) return customMessage;
                 switch(errorCode) {
@@ -403,8 +362,7 @@
                     default:
                         return 'There was an error on our end. Please try again later or request a new password reset link.';
                 }
-            };
-            
+            };            
             const validatePassword = () => {
                 const newRequirements = {
                     length: password.length >= 8,
@@ -769,4 +727,5 @@
     </script>
 </body>
 </html>
+
 
