@@ -118,19 +118,49 @@
                 number: false,
                 match: false
             });
-            
-            // Initialize Supabase client
-            let supabase = null;
-            try {
-                if (window.supabase) {
-                    const supabaseUrl = 'https://vmdsqcwgrivjaxikiabr.supabase.co';
-                    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtZHNxY3dncml2amF4aWtpYWJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ3MDU1NjcsImV4cCI6MjA1MDI4MTU2N30.6oSx_XpqwNB0FzRnNVfhW91U8FO7QGBL0r9Q5zxKqDg';
-                    supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
-                }
-            } catch (e) {
-                console.warn('Supabase not available:', e);
-            }
-            
+            const [supabase, setSupabase] = React.useState(null);
+
+            // Initialize Supabase client with retry mechanism
+            React.useEffect(() => {
+                const initializeSupabase = async () => {
+                    const maxRetries = 3;
+                    let attempt = 0;
+
+                    const tryInitialize = async () => {
+                        try {
+                            if (typeof window.supabase === 'undefined') {
+                                throw new Error('Supabase library not loaded yet.');
+                            }
+                            const supabaseUrl = 'https://vmdsqcwgrivjaxikiabr.supabase.co';
+                            const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtZHNxY3dncml2amF4aWtpYWJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ3MDU1NjcsImV4cCI6MjA1MDI4MTU2N30.6oSx_XpqwNB0FzRnNVfhW91U8FO7QGBL0r9Q5zxKqDg';
+                            const client = window.supabase.createClient(supabaseUrl, supabaseKey);
+                            console.log('Supabase client initialized successfully');
+                            setSupabase(client);
+                            return true;
+                        } catch (e) {
+                            console.warn('Supabase initialization attempt', attempt + 1, 'failed:', e);
+                            return false;
+                        }
+                    };
+
+                    while (attempt < maxRetries) {
+                        if (await tryInitialize()) {
+                            setLoading(false);
+                            return;
+                        }
+                        attempt++;
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
+                    }
+
+                    console.error('Supabase initialization failed after', maxRetries, 'attempts');
+                    setError('Failed to initialize authentication service. Please check your network connection and try again.');
+                    setStep('error');
+                    setLoading(false);
+                };
+
+                initializeSupabase();
+            }, []);
+
             // Enhanced parameter parsing function
             const parseUrlParameters = () => {
                 const urlParams = new URLSearchParams(window.location.search);
@@ -164,8 +194,9 @@
             const userAgent = navigator.userAgent || "";
             
             React.useEffect(() => {
+                if (!supabase) return; // Wait for Supabase to initialize
                 initializePage();
-            }, []);
+            }, [supabase]);
             
             React.useEffect(() => {
                 validatePassword();
@@ -270,13 +301,15 @@
                     setError('Please meet all password requirements.');
                     return;
                 }
+                if (!supabase) {
+                    setError('Authentication service not available. Please try again later or check your network connection.');
+                    return;
+                }
                 setIsSubmitting(true);
                 setError('');
                 
                 try {
-                    if (!supabase) {
-                        throw new Error('Authentication service not available. Please try again later.');
-                    }
+                    console.log('Attempting to set session with tokens:', { accessToken, token, refreshToken });
 
                     // AUTHENTICATE FIRST: Set session using tokens from URL
                     if (accessToken) {
@@ -291,11 +324,11 @@
                             if (error.message?.includes('Token has expired') || error.message?.includes('invalid')) {
                                 throw new Error('Your password reset session has expired. Please request a new password reset link.');
                             } else {
-                                throw new Error('Authentication failed. Please request a new password reset link.');
+                                throw new Error('Authentication failed: ' + error.message);
                             }
                         }
                         
-                        console.log('Session authenticated successfully for password update');
+                        console.log('Session authenticated successfully for password update:', data);
                     } else if (token) {
                         console.log('Setting session for password update using JWT token');
                         const { data, error } = await supabase.auth.setSession({
@@ -308,8 +341,9 @@
                             throw new Error('Your reset link has expired or is invalid. Please request a new password reset.');
                         }
                         
-                        console.log('JWT session authenticated successfully for password update');
+                        console.log('JWT session authenticated successfully for password update:', data);
                     } else {
+                        console.error('No authentication tokens provided');
                         throw new Error('No authentication tokens available. Please request a new password reset link.');
                     }
 
@@ -326,7 +360,7 @@
                         } else if (updateError.message?.includes('network') || updateError.message?.includes('fetch')) {
                             throw new Error('Network error. Please check your connection and try again.');
                         } else {
-                            throw new Error('Failed to update password. Please try again or request a new reset link.');
+                            throw new Error('Failed to update password: ' + updateError.message);
                         }
                     }
                     
@@ -362,7 +396,6 @@
                         return 'There was an error on our end. Please try again later or request a new password reset link.';
                 }
             };            
-            
             const validatePassword = () => {
                 const newRequirements = {
                     length: password.length >= 8,
@@ -534,7 +567,7 @@
                                                 <div className="mt-3">
                                                     <div className="flex justify-between items-center mb-2">
                                                         <span className="text-sm text-gray-600 font-medium">Password Strength</span>
-                                                        <span className={`text-sm font-semibold ${passwordStrength < 40 ? 'text-red-500' : passwordStrength < 80 ? 'text-amber-500' : 'text-emerald-500'}`}>
+                                                        <span className={`text-sm font-semibold ${passwordStrength < 40 ? 'text-red-500' : passwordStrength < 80 ? 'text-amber-500' : 'text-emerald-600'}`}>
                                                             {getStrengthText()}
                                                         </span>
                                                     </div>
@@ -591,7 +624,7 @@
                                         
                                         <button
                                             type="submit"
-                                            disabled={isSubmitting || !Object.values(requirements).every(Boolean)}
+                                            disabled={isSubmitting || !Object.values(requirements).every(Boolean) || !supabase}
                                             className="w-full btn-primary text-white px-6 py-3.5 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold text-base shadow-md"
                                         >
                                             {isSubmitting ? (
