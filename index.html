@@ -100,13 +100,15 @@
                     email: decodeURIComponent(getParam('email') || ''),
                     error: getParam('error'),
                     message: getParam('message'),
-                    verified: getParam('verified') === 'true'
+                    verified: getParam('verified') === 'true',
+                    access_token: getParam('access_token'),
+                    refresh_token: getParam('refresh_token')
                 };
             };
 
             // Parse parameters once
             const params = parseUrlParameters();
-            const token = params.token;
+            const token = params.access_token || params.token; // Prefer access_token for OTP flow, fallback to token for JWT
             const type = params.type;
             const email = params.email;
             const errorParam = params.error;
@@ -267,7 +269,7 @@
 
                     const data = await response.json();
                     if (!response.ok) {
-                        throw new Error(data.error || 'Failed to update password.');
+                        throw new Error(data.message || data.error || 'Failed to update password.');
                     }
 
                     console.log('Password updated successfully:', data);
@@ -291,18 +293,32 @@
                 switch(errorCode) {
                     case 'expired':
                     case 'token_expired':
+                    case 'otp_expired':
                         return 'The password reset link has expired. Please request a new one from the app.';
                     case 'invalid':
                     case 'invalid_link':
                     case 'invalid_token':
+                    case 'invalid_otp':
                         return 'The password reset link is invalid. Please request a new one from the app.';
                     case 'server_error':
                     case 'otp_failed':
                     case 'verification_failed':
+                    case 'token_verification_failed':
+                    case 'password_update_failed':
                         return 'There was an error on our end. Please try again later or request a new password reset link.';
                     case 'network_error':
                     case 'timeout':
                         return 'Network error occurred. Please check your connection and try again.';
+                    case 'missing_fields':
+                        return 'Missing required information. Please try again.';
+                    case 'invalid_email':
+                        return 'Invalid email format. Please check and try again.';
+                    case 'invalid_password':
+                        return 'Password must be at least 8 characters, with uppercase, lowercase, and a number.';
+                    case 'rate_limited':
+                        return 'Too many attempts. Please wait before trying again.';
+                    case 'no_user_id':
+                        return 'No user found for this reset link. Please request a new one.';
                     default:
                         return 'There was an error on our end. Please try again later or request a new password reset link.';
                 }
