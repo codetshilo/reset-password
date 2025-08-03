@@ -69,179 +69,198 @@
 <body>
     <div id="root"></div>
     <script type="text/babel">
-        const { createRoot } = ReactDOM;
+    const { createRoot } = ReactDOM;
 
-        // Email validation function
-        const isValidEmail = (email) => {
-            if (!email || typeof email !== 'string') return false;
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            const isValidFormat = emailRegex.test(email);
-            const hasValidLength = email.length >= 5 && email.length <= 254;
-            const hasValidParts = email.split('@').length === 2;
-            if (!isValidFormat || !hasValidLength || !hasValidParts) {
-                return false;
-            }
-            const [localPart, domain] = email.split('@');
-            if (localPart.length === 0 || localPart.length > 64) return false;
-            if (localPart.startsWith('.') || localPart.endsWith('.')) return false;
-            if (localPart.includes('..')) return false;
-            if (domain.length === 0 || domain.length > 253) return false;
-            if (domain.startsWith('.') || domain.endsWith('.')) return false;
-            if (domain.includes('..')) return false;
-            if (!domain.includes('.')) return false;
-            return true;
+    // Parse URL parameters
+    const parseUrlParameters = () => {
+        const params = new URLSearchParams(window.location.search);
+        return {
+            access_token: params.get('access_token'),
+            token: params.get('token'),
+            type: params.get('type'),
+            email: params.get('email'),
+            error: params.get('error'),
+            message: params.get('message'),
+            verified: params.get('verified')
         };
+    };
 
-        // Log attempt function
-        const logAttempt = (email, token, success, errorCode = null) => {
-            const timestamp = new Date().toISOString();
-            const logEntry = {
-                email: email ? email.substring(0, 3) + "***@" + email.split('@')[1] : 'unknown',
-                token_prefix: token ? token.substring(0, 4) + "****" : 'unknown',
-                success: success,
-                error_code: errorCode,
-                timestamp: timestamp,
-                user_agent: navigator.userAgent || 'not provided'
-            };
-            console.log(`[${timestamp}] CLIENT_ATTEMPT_LOG:`, JSON.stringify(logEntry));
+    // Email validation function
+    const isValidEmail = (email) => {
+        if (!email || typeof email !== 'string') return false;
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const isValidFormat = emailRegex.test(email);
+        const hasValidLength = email.length >= 5 && email.length <= 254;
+        const hasValidParts = email.split('@').length === 2;
+        if (!isValidFormat || !hasValidLength || !hasValidParts) {
+            return false;
+        }
+        const [localPart, domain] = email.split('@');
+        if (localPart.length === 0 || localPart.length > 64) return false;
+        if (localPart.startsWith('.') || localPart.endsWith('.')) return false;
+        if (localPart.includes('..')) return false;
+        if (domain.length === 0 || domain.length > 253) return false;
+        if (domain.startsWith('.') || domain.endsWith('.')) return false;
+        if (domain.includes('..')) return false;
+        if (!domain.includes('.')) return false;
+        return true;
+    };
+
+    // Log attempt function
+    const logAttempt = (email, token, success, errorCode = null) => {
+        const timestamp = new Date().toISOString();
+        const logEntry = {
+            email: email ? email.substring(0, 3) + "***@" + email.split('@')[1] : 'unknown',
+            token_prefix: token ? token.substring(0, 4) + "****" : 'unknown',
+            success: success,
+            error_code: errorCode,
+            timestamp: timestamp,
+            user_agent: navigator.userAgent || 'not provided'
         };
+        console.log(`[${timestamp}] CLIENT_ATTEMPT_LOG:`, JSON.stringify(logEntry));
+    };
 
-        // Rate limiting check
-        const otpAttempts = new Map();
-        const MAX_ATTEMPTS_PER_EMAIL = 5;
-        const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
-        const checkRateLimit = (email) => {
-            const now = Date.now();
-            const key = email.toLowerCase();
-            if (!otpAttempts.has(key)) {
-                otpAttempts.set(key, []);
-            }
-            const attempts = otpAttempts.get(key);
-            const recentAttempts = attempts.filter((timestamp) => now - timestamp < RATE_LIMIT_WINDOW);
-            otpAttempts.set(key, recentAttempts);
-            if (recentAttempts.length >= MAX_ATTEMPTS_PER_EMAIL) {
-                return false;
-            }
-            recentAttempts.push(now);
-            return true;
-        };
+    // Rate limiting check
+    const otpAttempts = new Map();
+    const MAX_ATTEMPTS_PER_EMAIL = 5;
+    const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
+    const checkRateLimit = (email) => {
+        const now = Date.now();
+        const key = email.toLowerCase();
+        if (!otpAttempts.has(key)) {
+            otpAttempts.set(key, []);
+        }
+        const attempts = otpAttempts.get(key);
+        const recentAttempts = attempts.filter((timestamp) => now - timestamp < RATE_LIMIT_WINDOW);
+        otpAttempts.set(key, recentAttempts);
+        if (recentAttempts.length >= MAX_ATTEMPTS_PER_EMAIL) {
+            return false;
+        }
+        recentAttempts.push(now);
+        return true;
+    };
 
-        // Create error redirect URL
-        const GITHUB_PAGES_URL = "https://codetshilo.github.io/reset-password/";
-        const createErrorRedirect = (errorType, customMessage) => {
-            const params = new URLSearchParams({
-                error: errorType,
-                ...(customMessage && { message: customMessage })
-            });
-            return `${GITHUB_PAGES_URL}?${params.toString()}`;
-        };
+    // Create error redirect URL
+    const GITHUB_PAGES_URL = "https://codetshilo.github.io/reset-password/";
+    const createErrorRedirect = (errorType, customMessage) => {
+        const params = new URLSearchParams({
+            error: errorType,
+            ...(customMessage && { message: customMessage })
+        });
+        return `${GITHUB_PAGES_URL}?${params.toString()}`;
+    };
 
-        function PasswordResetPage() {
-            const [loading, setLoading] = React.useState(true);
-            const [step, setStep] = React.useState('loading');
-            const [password, setPassword] = React.useState('');
-            const [confirmPassword, setConfirmPassword] = React.useState('');
-            const [isSubmitting, setIsSubmitting] = React.useState(false);
-            const [error, setError] = React.useState('');
-            const [passwordStrength, setPasswordStrength] = React.useState(0);
-            const [requirements, setRequirements] = React.useState({
-                length: false,
-                upper: false,
-                lower: false,
-                number: false,
-                match: false
-            });
+    // Rest of your existing code (PasswordResetPage component, etc.) remains unchanged
+    function PasswordResetPage() {
+        const [loading, setLoading] = React.useState(true);
+        const [step, setStep] = React.useState('loading');
+        const [password, setPassword] = React.useState('');
+        const [confirmPassword, setConfirmPassword] = React.useState('');
+        const [isSubmitting, setIsSubmitting] = React.useState(false);
+        const [error, setError] = React.useState('');
+        const [passwordStrength, setPasswordStrength] = React.useState(0);
+        const [requirements, setRequirements] = React.useState({
+            length: false,
+            upper: false,
+            lower: false,
+            number: false,
+            match: false
+        });
 
-            // Parse URL parameters
-            const params = parseUrlParameters();
-            const token = params.access_token || params.token; // Prefer access_token for OTP flow, fallback to token for JWT
-            const type = params.type;
-            const email = params.email;
-            const errorParam = params.error;
-            const message = params.message;
-            const verified = params.verified;
-            const userAgent = navigator.userAgent || "";
+        // Parse URL parameters
+        const params = parseUrlParameters();
+        const token = params.access_token || params.token; // Prefer access_token for OTP flow, fallback to token for JWT
+        const type = params.type;
+        const email = params.email;
+        const errorParam = params.error;
+        const message = params.message;
+        const verified = params.verified;
+        const userAgent = navigator.userAgent || "";
 
-            // Initialize page
-            React.useEffect(() => {
-                const initializePage = async () => {
-                    try {
-                        console.log('Initializing with params:', { 
-                            hasToken: !!token, 
-                            type, 
-                            email,
-                            hasError: !!errorParam,
-                            verified
-                        });
+        // Initialize page
+        React.useEffect(() => {
+            const initializePage = async () => {
+                try {
+                    console.log('Initializing with params:', { 
+                        hasToken: !!token, 
+                        type, 
+                        email,
+                        hasError: !!errorParam,
+                        verified
+                    });
 
-                        // Validate deep link
-                        if (!validateDeepLink(params)) {
-                            return;
-                        }
+                    // Validate deep link (assuming validateDeepLink is defined elsewhere)
+                    if (!validateDeepLink(params)) {
+                        return;
+                    }
 
-                        // Simulate loading for UX
-                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    // Simulate loading for UX
+                    await new Promise(resolve => setTimeout(resolve, 1000));
 
-                        if (errorParam) {
-                            setError(getErrorMessage(errorParam, message));
+                    if (errorParam) {
+                        setError(getErrorMessage(errorParam, message));
+                        setStep('error');
+                        setLoading(false);
+                        return;
+                    }
+
+                    if (verified) {
+                        console.log('Verified parameter present, proceeding to password reset form');
+                        setStep('reset');
+                        setLoading(false);
+                        return;
+                    }
+
+                    if (token && type === 'recovery' && email) {
+                        const otpRequestKey = `otp_request_${token}_${email}`;
+                        
+                        if (localStorage.getItem(otpRequestKey)) {
+                            console.log('Duplicate OTP request detected for:', otpRequestKey);
+                            setError('This password reset link has already been used or is being processed. Please request a new one.');
                             setStep('error');
                             setLoading(false);
                             return;
                         }
 
-                        if (verified) {
-                            console.log('Verified parameter present, proceeding to password reset form');
-                            setStep('reset');
+                        console.log('Redirecting to Supabase function for token verification');
+                        setStep('redirecting');
+                        
+                        const timeoutId = setTimeout(() => {
+                            console.log('Redirect timeout - assuming server error');
+                            setError('The verification process took too long. Please check your connection or request a new password reset link.');
+                            setStep('error');
                             setLoading(false);
-                            return;
+                        }, 10000);
+                        
+                        try {
+                            localStorage.setItem(otpRequestKey, 'processed');
+                            supabaseRedirect(token, type, email); // Assuming supabaseRedirect is defined
+                        } catch (err) {
+                            clearTimeout(timeoutId);
+                            console.error('Redirect error:', err);
+                            setError('There was an error processing your request. Please try again or request a new password reset link.');
+                            setStep('error');
+                            setLoading(false);
                         }
-
-                        if (token && type === 'recovery' && email) {
-                            const otpRequestKey = `otp_request_${token}_${email}`;
-                            
-                            if (localStorage.getItem(otpRequestKey)) {
-                                console.log('Duplicate OTP request detected for:', otpRequestKey);
-                                setError('This password reset link has already been used or is being processed. Please request a new one.');
-                                setStep('error');
-                                setLoading(false);
-                                return;
-                            }
-
-                            console.log('Redirecting to Supabase function for token verification');
-                            setStep('redirecting');
-                            
-                            const timeoutId = setTimeout(() => {
-                                console.log('Redirect timeout - assuming server error');
-                                setError('The verification process took too long. Please check your connection or request a new password reset link.');
-                                setStep('error');
-                                setLoading(false);
-                            }, 10000);
-                            
-                            try {
-                                localStorage.setItem(otpRequestKey, 'processed');
-                                supabaseRedirect(token, type, email);
-                            } catch (err) {
-                                clearTimeout(timeoutId);
-                                console.error('Redirect error:', err);
-                                setError('There was an error processing your request. Please try again or request a new password reset link.');
-                                setStep('error');
-                                setLoading(false);
-                            }
-                            return;
-                        }
-
-                        // Mobile redirects
-                        mobileRedirect();
-                    } catch (err) {
-                        console.error('Initialization error:', err);
-                        setError('There was an error on our end. Please try again later or request a new password reset link.');
-                        setStep('error');
-                        setLoading(false);
+                        return;
                     }
-                };
 
-                initializePage();
-            }, []);
+                    // Mobile redirects (assuming mobileRedirect is defined)
+                    mobileRedirect();
+                } catch (err) {
+                    console.error('Initialization error:', err);
+                    setError('There was an error on our end. Please try again later or request a new password reset link.');
+                    setStep('error');
+                    setLoading(false);
+                }
+            };
+
+            initializePage();
+        }, []);
+
+    const root = createRoot(document.getElementById('root'));
+    root.render(<PasswordResetPage />);
+</script>
 
             // Validate password
             React.useEffect(() => {
@@ -539,3 +558,4 @@
     </script>
 </body>
 </html>
+
