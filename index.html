@@ -174,174 +174,175 @@
             
             // FIXED: Main initialization function with proper logic flow
             const initializePage = async () => {
-    try {
-        console.log('Initializing with params:', { 
-            hasToken: !!token, 
-            type, 
-            email: emailParam,
-            hasAccessToken: !!accessToken,
-            hasRefreshToken: !!refreshToken,
-            hasError: !!errorParam,
-            verified
-        });
+                try {
+                    console.log('Initializing with params:', { 
+                        hasToken: !!token, 
+                        type, 
+                        email: emailParam,
+                        hasAccessToken: !!accessToken,
+                        hasRefreshToken: !!refreshToken,
+                        hasError: !!errorParam,
+                        verified
+                    });
 
-        // ✅ Early exit if verified is true - just show the form
-        if (verified === 'true') {
-            console.log('Verified parameter present, proceeding to password reset form');
-            setEmail(emailParam || '');
-            setStep('reset');
-            setLoading(false);
-            return;
-        }
+                    // ✅ Early exit if verified is true - just show the form
+                    if (verified === 'true') {
+                        console.log('Verified parameter present, proceeding to password reset form');
+                        setEmail(emailParam || '');
+                        setStep('reset');
+                        setLoading(false);
+                        return;
+                    }
 
-        if (errorParam) {
-            setError(getErrorMessage(errorParam, message));
-            setStep('error');
-            setLoading(false);
-            return;
-        }
+                    if (errorParam) {
+                        setError(getErrorMessage(errorParam, message));
+                        setStep('error');
+                        setLoading(false);
+                        return;
+                    }
 
-        if (token && type === 'recovery' && emailParam && !redirectedFromFunction) {
-            const otpRequestKey = `otp_request_${token}_${emailParam}`;
-            
-            if (localStorage.getItem(otpRequestKey)) {
-                console.log('Duplicate OTP request detected for:', otpRequestKey);
-                setError('This password reset link has already been used or is being processed. Please request a new one if needed.');
-                setStep('error');
-                setLoading(false);
-                return;
-            }
+                    if (token && type === 'recovery' && emailParam && !redirectedFromFunction) {
+                        const otpRequestKey = `otp_request_${token}_${emailParam}`;
+                        
+                        if (localStorage.getItem(otpRequestKey)) {
+                            console.log('Duplicate OTP request detected for:', otpRequestKey);
+                            setError('This password reset link has already been used or is being processed. Please request a new one if needed.');
+                            setStep('error');
+                            setLoading(false);
+                            return;
+                        }
 
-            console.log('Redirecting to Supabase function for token verification');
-            setStep('redirecting');
-            
-            const timeoutId = setTimeout(() => {
-                console.log('Redirect timeout - assuming server error');
-                setError('The verification process took too long. Please check your connection or request a new password reset link.');
-                setStep('error');
-                setLoading(false);
-            }, 10000);
-            
-            try {
-                localStorage.setItem(otpRequestKey, 'processed');
-                
-                const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}&email=${encodeURIComponent(emailParam)}`;
-                console.log('Redirecting to:', supabaseUrl);
-                
-                window.location.href = supabaseUrl;
-                
-            } catch (err) {
-                clearTimeout(timeoutId);
-                console.error('Redirect error:', err);
-                setError('There was an error processing your request. Please try again or request a new password reset link.');
-                setStep('error');
-                setLoading(false);
-            }
-            return;
-        }
+                        console.log('Redirecting to Supabase function for token verification');
+                        setStep('redirecting');
+                        
+                        const timeoutId = setTimeout(() => {
+                            console.log('Redirect timeout - assuming server error');
+                            setError('The verification process took too long. Please check your connection or request a new password reset link.');
+                            setStep('error');
+                            setLoading(false);
+                        }, 10000);
+                        
+                        try {
+                            localStorage.setItem(otpRequestKey, 'processed');
+                            
+                            const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}&email=${encodeURIComponent(emailParam)}`;
+                            console.log('Redirecting to:', supabaseUrl);
+                            
+                            window.location.href = supabaseUrl;
+                            
+                        } catch (err) {
+                            clearTimeout(timeoutId);
+                            console.error('Redirect error:', err);
+                            setError('There was an error processing your request. Please try again or request a new password reset link.');
+                            setStep('error');
+                            setLoading(false);
+                        }
+                        return;
+                    }
 
-        // Mobile redirects
-        const androidAppLink = 'com.swapmystuff20://auth/login';
-        const webAppLink = 'https://swapmystuff.com/login';
-        if (userAgent.includes("Android") || userAgent.includes("iPhone")) {
-            console.log('Mobile detected, redirecting to app');
-            window.location.href = androidAppLink;
-            setTimeout(() => {
-                window.location.href = webAppLink;
-            }, 1000);
-            return;
-        }
+                    // Mobile redirects
+                    const androidAppLink = 'com.swapmystuff20://auth/login';
+                    const webAppLink = 'https://swapmystuff.com/login';
+                    if (userAgent.includes("Android") || userAgent.includes("iPhone")) {
+                        console.log('Mobile detected, redirecting to app');
+                        window.location.href = androidAppLink;
+                        setTimeout(() => {
+                            window.location.href = webAppLink;
+                        }, 1000);
+                        return;
+                    }
 
-        // Default case
-        setError('Invalid or expired password reset link. Please request a new password reset from the app.');
-        setStep('error');
-        setLoading(false);
+                    // Default case
+                    setError('Invalid or expired password reset link. Please request a new password reset from the app.');
+                    setStep('error');
+                    setLoading(false);
 
-    } catch (err) {
-        console.error('Initialization error:', err);
-        setError('There was an error on our end. Please try again later or request a new password reset link.');
-        setStep('error');
-        setLoading(false);
-    }
-};
-
-// Modified handleSubmit to authenticate before password update
-const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!Object.values(requirements).every(Boolean)) {
-        setError('Please meet all password requirements.');
-        return;
-    }
-    setIsSubmitting(true);
-    setError('');
-    
-    try {
-        if (!supabase) {
-            throw new Error('Authentication service not available. Please try again later.');
-        }
-
-        // AUTHENTICATE FIRST: Set session using tokens from URL
-        if (accessToken) {
-            console.log('Setting session for password update using access token');
-            const { data, error } = await supabase.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshToken || ''
-            });
-            
-            if (error) {
-                console.error('Session authentication failed:', error);
-                if (error.message?.includes('Token has expired') || error.message?.includes('invalid')) {
-                    throw new Error('Your password reset session has expired. Please request a new password reset link.');
-                } else {
-                    throw new Error('Authentication failed. Please request a new password reset link.');
+                } catch (err) {
+                    console.error('Initialization error:', err);
+                    setError('There was an error on our end. Please try again later or request a new password reset link.');
+                    setStep('error');
+                    setLoading(false);
                 }
-            }
-            
-            console.log('Session authenticated successfully for password update');
-        } else if (token) {
-            console.log('Setting session for password update using JWT token');
-            const { data, error } = await supabase.auth.setSession({
-                access_token: token,
-                refresh_token: ''
-            });
-            
-            if (error) {
-                console.error('JWT session authentication failed:', error);
-                throw new Error('Your reset link has expired or is invalid. Please request a new password reset.');
-            }
-            
-            console.log('JWT session authenticated successfully for password update');
-        } else {
-            throw new Error('No authentication tokens available. Please request a new password reset link.');
-        }
+            };
 
-        // NOW UPDATE PASSWORD: User is authenticated
-        console.log('Updating password...');
-        const { error: updateError } = await supabase.auth.updateUser({
-            password: password
-        });
-        
-        if (updateError) {
-            console.error('Password update failed:', updateError);
-            if (updateError.message?.includes('Token has expired') || updateError.message?.includes('invalid')) {
-                throw new Error('Your password reset session has expired. Please request a new password reset link.');
-            } else if (updateError.message?.includes('network') || updateError.message?.includes('fetch')) {
-                throw new Error('Network error. Please check your connection and try again.');
-            } else {
-                throw new Error('Failed to update password. Please try again or request a new reset link.');
-            }
-        }
-        
-        console.log('Password updated successfully');
-        setStep('success');
-        
-    } catch (err) {
-        console.error('Password update error:', err);
-        setError(err.message || 'There was an error updating your password. Please try again later.');
-    } finally {
-        setIsSubmitting(false);
-    }
-};
+            // Modified handleSubmit to authenticate before password update
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (!Object.values(requirements).every(Boolean)) {
+                    setError('Please meet all password requirements.');
+                    return;
+                }
+                setIsSubmitting(true);
+                setError('');
+                
+                try {
+                    if (!supabase) {
+                        throw new Error('Authentication service not available. Please try again later.');
+                    }
+
+                    // AUTHENTICATE FIRST: Set session using tokens from URL
+                    if (accessToken) {
+                        console.log('Setting session for password update using access token');
+                        const { data, error } = await supabase.auth.setSession({
+                            access_token: accessToken,
+                            refresh_token: refreshToken || ''
+                        });
+                        
+                        if (error) {
+                            console.error('Session authentication failed:', error);
+                            if (error.message?.includes('Token has expired') || error.message?.includes('invalid')) {
+                                throw new Error('Your password reset session has expired. Please request a new password reset link.');
+                            } else {
+                                throw new Error('Authentication failed. Please request a new password reset link.');
+                            }
+                        }
+                        
+                        console.log('Session authenticated successfully for password update');
+                    } else if (token) {
+                        console.log('Setting session for password update using JWT token');
+                        const { data, error } = await supabase.auth.setSession({
+                            access_token: token,
+                            refresh_token: ''
+                        });
+                        
+                        if (error) {
+                            console.error('JWT session authentication failed:', error);
+                            throw new Error('Your reset link has expired or is invalid. Please request a new password reset.');
+                        }
+                        
+                        console.log('JWT session authenticated successfully for password update');
+                    } else {
+                        throw new Error('No authentication tokens available. Please request a new password reset link.');
+                    }
+
+                    // NOW UPDATE PASSWORD: User is authenticated
+                    console.log('Updating password...');
+                    const { error: updateError } = await supabase.auth.updateUser({
+                        password: password
+                    });
+                    
+                    if (updateError) {
+                        console.error('Password update failed:', updateError);
+                        if (updateError.message?.includes('Token has expired') || updateError.message?.includes('invalid')) {
+                            throw new Error('Your password reset session has expired. Please request a new password reset link.');
+                        } else if (updateError.message?.includes('network') || updateError.message?.includes('fetch')) {
+                            throw new Error('Network error. Please check your connection and try again.');
+                        } else {
+                            throw new Error('Failed to update password. Please try again or request a new reset link.');
+                        }
+                    }
+                    
+                    console.log('Password updated successfully');
+                    setStep('success');
+                    
+                } catch (err) {
+                    console.error('Password update error:', err);
+                    setError(err.message || 'There was an error updating your password. Please try again later.');
+                } finally {
+                    setIsSubmitting(false);
+                }
+            };
+
             const getErrorMessage = (errorCode, customMessage) => {
                 if (customMessage) return customMessage;
                 switch(errorCode) {
@@ -363,6 +364,7 @@ const handleSubmit = async (e) => {
                         return 'There was an error on our end. Please try again later or request a new password reset link.';
                 }
             };            
+            
             const validatePassword = () => {
                 const newRequirements = {
                     length: password.length >= 8,
@@ -387,41 +389,6 @@ const handleSubmit = async (e) => {
                 if (passwordStrength < 40) return 'Weak';
                 if (passwordStrength < 80) return 'Moderate';
                 return 'Strong';
-            };
-            
-            const handleSubmit = async (e) => {
-                e.preventDefault();
-                if (!Object.values(requirements).every(Boolean)) {
-                    setError('Please meet all password requirements.');
-                    return;
-                }
-                setIsSubmitting(true);
-                setError('');
-                try {
-                    if (supabase) {
-                        const { error } = await supabase.auth.updateUser({
-                            password: password
-                        });
-                        if (error) {
-                            if (error.message?.includes('Token has expired') || error.message?.includes('invalid')) {
-                                throw new Error('Your password reset session has expired. Please request a new password reset link.');
-                            } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
-                                throw new Error('Network error. Please check your connection and try again.');
-                            } else {
-                                throw new Error('There was an error on our end. Please try again later.');
-                            }
-                        }
-                        console.log('Password updated successfully');
-                        setStep('success');
-                    } else {
-                        throw new Error('Authentication service not available. Please try again later.');
-                    }
-                } catch (err) {
-                    console.error('Password update error:', err);
-                    setError(err.message || 'There was an error on our end. Please try again later.');
-                } finally {
-                    setIsSubmitting(false);
-                }
             };
             
             const openApp = () => {
@@ -658,11 +625,7 @@ const handleSubmit = async (e) => {
                                             )}
                                             
                                             <div className="mt-4 space-y-2">
-                                                <div className={`text-sm flex items-center ${requirements.length ? 'text-emerald-600' : 'text-gray-500'}`}>
-                                                    <span className="mr-2 text-lg">{requirements.length ? '✓' : '○'}</span>
-                                                    At least 8 characters
-                                                </div>
-                                                <div className={`text-sm flex items-center ${requirements.upper ? 'text-emerald-600' : 'text-gray-500'}`}>
+-sm flex items-center ${requirements.upper ? 'text-emerald-600' : 'text-gray-500'}`}>
                                                     <span className="mr-2 text-lg">{requirements.upper ? '✓' : '○'}</span>
                                                     One uppercase letter
                                                 </div>
@@ -726,6 +689,8 @@ const handleSubmit = async (e) => {
         root.render(<PasswordResetPage />);
     </script>
 </body>
-</html>
-
-
+</html>-sm flex items-center ${requirements.length ? 'text-emerald-600' : 'text-gray-500'}`}>
+                                                    <span className="mr-2 text-lg">{requirements.length ? '✓' : '○'}</span>
+                                                    At least 8 characters
+                                                </div>
+                                                <div className={`text
