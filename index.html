@@ -156,43 +156,17 @@
                                 return;
                             }
 
-                            console.log('Redirecting to Supabase function for token verification');
-                            setStep('redirecting');
-                            
-                            const timeoutId = setTimeout(() => {
-                                console.log('Redirect timeout - assuming server error');
-                                setError('The verification process took too long. Please check your connection or request a new password reset link.');
-                                setStep('error');
-                                setLoading(false);
-                            }, 10000);
-                            
-                            try {
-                                localStorage.setItem(otpRequestKey, 'processed');
-                                
-                                const supabaseUrl = `https://vmdsqcwgrivjaxikiabr.supabase.co/functions/v1/password-reset?token=${token}&type=${type}&email=${encodeURIComponent(email)}`;
-                                console.log('Redirecting to:', supabaseUrl);
-                                
-                                window.location.href = supabaseUrl;
-                                
-                            } catch (err) {
-                                clearTimeout(timeoutId);
-                                console.error('Redirect error:', err);
-                                setError('There was an error processing your request. Please try again or request a new password reset link.');
-                                setStep('error');
-                                setLoading(false);
-                            }
+                            console.log('Showing button for user-initiated redirect to app');
+                            setStep('redirect');
+                            setLoading(false);
                             return;
                         }
 
-                        // Mobile redirects
-                        const androidAppLink = 'com.swapmystuff20://auth/login';
-                        const webAppLink = 'https://swapmystuff.com/login';
+                        // Mobile detection
                         if (userAgent.includes("Android") || userAgent.includes("iPhone")) {
-                            console.log('Mobile detected, redirecting to app');
-                            window.location.href = androidAppLink;
-                            setTimeout(() => {
-                                window.location.href = webAppLink;
-                            }, 1000);
+                            console.log('Mobile detected, showing button for user-initiated redirect');
+                            setStep('redirect');
+                            setLoading(false);
                             return;
                         }
 
@@ -274,11 +248,6 @@
 
                     console.log('Password updated successfully:', data);
                     setStep('success');
-
-                    // Auto-redirect to app after 3 seconds
-                    setTimeout(() => {
-                        window.location.href = `com.swapmystuff20://auth/login?email=${encodeURIComponent(email)}&verified=true`;
-                    }, 3000);
                 } catch (err) {
                     console.error('Password update error:', err);
                     setError(err.message || 'There was an error updating your password. Please try again later.');
@@ -324,29 +293,48 @@
                 }
             };
 
-            const openApp = () => {
-                const deepLink = `com.swapmystuff20://auth/login?email=${encodeURIComponent(email)}`;
-                console.log('Opening app with deep link:', deepLink);
-                window.location.href = deepLink;
+            const handleRedirectToApp = () => {
+                if (step === 'redirect' && token && type === 'recovery' && email) {
+                    const deepLink = `com.swapmystuff20://auth/reset?token=${encodeURIComponent(token)}&type=${encodeURIComponent(type)}&email=${encodeURIComponent(email)}`;
+                    console.log('Redirecting to app with deep link:', deepLink);
+                    window.location.href = deepLink;
+                } else if (step === 'success') {
+                    const deepLink = `com.swapmystuff20://auth/login?email=${encodeURIComponent(email)}&verified=true`;
+                    console.log('Redirecting to app with deep link:', deepLink);
+                    window.location.href = deepLink;
+                } else if (step === 'error') {
+                    const deepLink = `com.swapmystuff20://auth/confirm?email=${encodeURIComponent(email)}`;
+                    console.log('Redirecting to app with deep link:', deepLink);
+                    window.location.href = deepLink;
+                } else {
+                    console.error('Cannot redirect: missing token, type, or email');
+                    setError('Missing required information. Please request a new password reset link.');
+                    setStep('error');
+                }
             };
 
-            const requestNewReset = () => {
-                openApp();
-            };
-
-            if (loading || step === 'redirecting') {
+            if (loading) {
                 return (
-                    <div className={`min-h-screen gradient-bg flex items-center justify-center p-4`}>
+                    <div className="min-h-screen gradient-bg flex items-center justify-center p-4">
                         <div className="text-center bg-white rounded-3xl shadow-2xl p-8 transform transition-all duration-500">
                             <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                            <p className="text-gray-800 text-lg font-medium">
-                                {step === 'redirecting' ? 'Verifying your reset link...' : 'Processing...'}
-                            </p>
-                            {step === 'redirecting' && (
-                                <p className="text-gray-600 text-sm mt-3">
-                                    If this takes too long, please try requesting a new reset link.
-                                </p>
-                            )}
+                            <p className="text-gray-800 text-lg font-medium">Processing...</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (step === 'redirect') {
+                return (
+                    <div className="min-h-screen gradient-bg flex items-center justify-center p-4">
+                        <div className="text-center bg-white rounded-3xl shadow-2xl p-8 transform transition-all duration-500">
+                            <h2 className="text-2xl font-bold text-gray-800 mb-4">Redirecting to app...</h2>
+                            <button
+                                onClick={handleRedirectToApp}
+                                className="inline-block bg-blue-600 text-white px-8 py-4 rounded-xl hover:bg-blue-700 transform hover:scale-105 transition-all duration-200 font-semibold text-lg shadow-lg"
+                            >
+                                Open App
+                            </button>
                         </div>
                     </div>
                 );
@@ -372,17 +360,12 @@
                                     <p className="text-gray-500 mb-6 text-sm">
                                         <span className="font-medium text-blue-600">{email}</span>
                                     </p>
-                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                                        <p className="text-blue-800 text-sm pulse-slow">
-                                            🚀 Redirecting to SwapMyStuff app in a moment...
-                                        </p>
-                                    </div>
-                                    <a 
-                                        href={`com.swapmystuff20://auth/login?email=${encodeURIComponent(email)}&verified=true`}
+                                    <button
+                                        onClick={handleRedirectToApp}
                                         className="inline-block bg-blue-600 text-white px-8 py-4 rounded-xl hover:bg-blue-700 transform hover:scale-105 transition-all duration-200 font-semibold text-lg shadow-lg"
                                     >
                                         🚀 Open SwapMyStuff App
-                                    </a>
+                                    </button>
                                 </>
                             ) : step === 'error' ? (
                                 <>
@@ -400,12 +383,12 @@
                                             💡 Please request a new password reset from the SwapMyStuff app.
                                         </p>
                                     </div>
-                                    <a 
-                                        href={`com.swapmystuff20://auth/confirm?email=${encodeURIComponent(email)}`}
+                                    <button
+                                        onClick={handleRedirectToApp}
                                         className="inline-block bg-blue-600 text-white px-8 py-4 rounded-xl hover:bg-blue-700 transform hover:scale-105 transition-all duration-200 font-semibold text-lg shadow-lg mb-6"
                                     >
                                         Request New Reset Link
-                                    </a>
+                                    </button>
                                 </>
                             ) : (
                                 <>
