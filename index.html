@@ -67,24 +67,6 @@
     </style>
 </head>
 <body>
-  <h2>Redirecting to app...</h2>
-  <button id="openAppBtn" style="font-size:18px;padding:10px 20px;">Open App</button>
-
-  <script>
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get("token");
-    const type = params.get("type");
-    const email = params.get("email");
-
-    document.getElementById("openAppBtn").addEventListener("click", () => {
-      if (token && type && email) {
-        const redirectUrl = `com.swapmystuff20://auth/reset?token=${token}&type=${type}&email=${email}`;
-        window.location.href = redirectUrl;
-      } else {
-        alert("Missing token, type, or email");
-      }
-    });
-  </script>
     <div id="root"></div>
     <script type="text/babel">
         const { createRoot } = ReactDOM;
